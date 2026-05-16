@@ -1,0 +1,50 @@
+:root {
+  color-scheme: light;
+  --ink: #163345;
+  --ink-soft: #426171;
+  --sky: #bce7f5;
+  --cave: #294a54;
+  --moss: #3aa981;
+  --sun: #f6c55f;
+  --coral: #f06f59;
+  --violet: #7e65d8;
+  --paper: #fff9e9;
+  --panel: rgba(255, 249, 233, 0.9);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f7f0d7;
+  color: var(--ink);
+  font-family: "Trebuchet MS", "Avenir Next", Verdana, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: #f6c55f;
+  color: #173b4f;
+}

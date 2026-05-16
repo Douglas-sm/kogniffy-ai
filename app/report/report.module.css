@@ -1,0 +1,168 @@
+.page {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(246, 197, 95, 0.45), transparent 20rem),
+    radial-gradient(circle at 86% 8%, rgba(111, 214, 197, 0.4), transparent 22rem),
+    linear-gradient(180deg, #edf8f3 0%, #f8edc9 100%);
+  min-height: 100vh;
+  padding: clamp(1rem, 3vw, 3rem);
+}
+
+.shell {
+  margin: 0 auto;
+  max-width: 1120px;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.homeLink {
+  border: 0.14rem solid #173b4f;
+  border-radius: 999px;
+  color: #173b4f;
+  font-weight: 900;
+  padding: 0.72rem 1rem;
+}
+
+.title {
+  font-size: clamp(2.4rem, 7vw, 5.5rem);
+  line-height: 0.9;
+  margin: 0;
+}
+
+.subtitle {
+  color: #426171;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  max-width: 48rem;
+}
+
+.notice {
+  background: #173b4f;
+  border-radius: 1rem;
+  color: #fff9e9;
+  font-weight: 800;
+  line-height: 1.55;
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+}
+
+.panel,
+.category,
+.empty {
+  background: rgba(255, 249, 233, 0.92);
+  border: 0.14rem solid rgba(23, 59, 79, 0.18);
+  border-radius: 0.75rem;
+  box-shadow: 0 1rem 2rem rgba(23, 59, 79, 0.12);
+  padding: 1.1rem;
+}
+
+.metricRow {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric {
+  background: #e5f4ed;
+  border-radius: 0.65rem;
+  padding: 1rem;
+}
+
+.metric strong {
+  display: block;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.chartWrap {
+  height: 21rem;
+  margin-top: 1rem;
+}
+
+.categories {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.categoryHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.category h2,
+.panel h2 {
+  font-size: 1.3rem;
+  margin: 0 0 0.7rem;
+}
+
+.score {
+  border-radius: 999px;
+  color: #173b4f;
+  font-weight: 900;
+  padding: 0.42rem 0.7rem;
+}
+
+.baixo {
+  background: #8bdc91;
+}
+
+.intermediario {
+  background: #f3d56a;
+}
+
+.alto {
+  background: #f58b76;
+}
+
+.category p,
+.panel p,
+.empty p {
+  color: #426171;
+  line-height: 1.58;
+}
+
+.recommendations {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.recommendations li {
+  line-height: 1.6;
+  margin: 0.35rem 0;
+}
+
+.empty {
+  margin: 4rem auto;
+  max-width: 42rem;
+}
+
+.button {
+  background: #f06f59;
+  border-radius: 999px;
+  color: #fff9e9;
+  display: inline-flex;
+  font-weight: 900;
+  margin-top: 1rem;
+  padding: 0.9rem 1.2rem;
+}
+
+@media (max-width: 860px) {
+  .grid,
+  .metricRow {
+    grid-template-columns: 1fr;
+  }
+}

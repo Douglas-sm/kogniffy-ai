@@ -1,0 +1,89 @@
+.page {
+  background:
+    radial-gradient(circle at 12% 16%, rgba(246, 197, 95, 0.38), transparent 18rem),
+    radial-gradient(circle at 84% 18%, rgba(126, 101, 216, 0.34), transparent 20rem),
+    linear-gradient(180deg, #bce7f5 0%, #254c58 100%);
+  min-height: 100vh;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.shell {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0 auto;
+  max-width: 1120px;
+}
+
+.topbar {
+  align-items: center;
+  color: #fff9e9;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  font-size: clamp(1.4rem, 3vw, 2.3rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0;
+  text-shadow: 0 0.2rem 0 rgba(23, 59, 79, 0.4);
+}
+
+.homeLink {
+  border: 0.14rem solid rgba(255, 249, 233, 0.85);
+  border-radius: 999px;
+  color: #fff9e9;
+  font-weight: 900;
+  padding: 0.65rem 0.9rem;
+}
+
+.stage {
+  background: rgba(255, 249, 233, 0.18);
+  border: 0.2rem solid rgba(255, 249, 233, 0.62);
+  border-radius: 1rem;
+  box-shadow: 0 1.4rem 3rem rgba(8, 25, 35, 0.34);
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas {
+  aspect-ratio: 16 / 9;
+  display: block;
+  height: auto;
+  outline: none;
+  width: 100%;
+}
+
+.help {
+  color: #fff9e9;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.helpItem {
+  background: rgba(23, 59, 79, 0.45);
+  border: 0.12rem solid rgba(255, 249, 233, 0.26);
+  border-radius: 0.75rem;
+  font-weight: 800;
+  padding: 0.8rem;
+}
+
+.notice {
+  color: #fff9e9;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .help {
+    grid-template-columns: 1fr;
+  }
+}

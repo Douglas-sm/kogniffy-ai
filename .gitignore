@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+dist
+.vercel
+.env
+.env.local
+.env.*.local
+*.log
+coverage
+*.tsbuildinfo
+models/kogniffy/*.bin
+models/kogniffy/model.json
+models/kogniffy/normalization.json
+/.idea
