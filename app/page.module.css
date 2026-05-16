@@ -38,14 +38,23 @@
 .content {
   align-self: center;
   max-width: 42rem;
+
+  .contentText {
+    background: rgba(255, 255, 255, 0.72);
+    border-radius: 1rem;
+    padding: 1rem;
+  }
 }
 
 .logo {
-  color: #173b4f;
-  font-size: clamp(3.7rem, 9vw, 7.8rem);
-  line-height: 0.85;
+  line-height: 0;
   margin: 0;
-  text-shadow: 0 0.3rem 0 rgba(255, 255, 255, 0.5);
+}
+
+.logoImage {
+  display: block;
+  height: auto;
+  width: clamp(16rem, 52vw, 32rem);
 }
 
 .subtitle {
@@ -78,14 +87,14 @@
   background: #f06f59;
   border: 0;
   border-radius: 999px;
-  box-shadow: 0 1rem 0 #b74c3c, 0 1.45rem 2.5rem rgba(44, 49, 55, 0.24);
+  box-shadow: 0 1rem 0 #b74c3c, 0 0.5rem 0.5rem rgba(44, 49, 55, 0.24);
   color: #fff9e9;
   display: inline-flex;
   font-size: 1.25rem;
   font-weight: 900;
   gap: 0.7rem;
   letter-spacing: 0;
-  margin-top: 2rem;
+  margin: 1rem auto 0 auto;
   padding: 1.05rem 1.8rem;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }

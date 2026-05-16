@@ -1,4 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
+import brandLogo from "../public/images/kogniffyai_logo.webp";
 import styles from "./page.module.css";
 
 function MountainKogArt() {
@@ -35,9 +37,15 @@ export default function Home() {
     <main className={styles.main}>
       <div className={styles.shell}>
         <section className={styles.content} aria-labelledby="home-title">
-          <h1 id="home-title" className={styles.logo}>
-            Kogniffy AI
-          </h1>
+
+            <Image
+              alt="Kogniffy AI"
+              className={styles.logoImage}
+              priority
+              sizes="(max-width: 860px) 82vw, 520px"
+              src={brandLogo}
+            />
+          <section className={styles.contentText}>
           <p className={styles.subtitle}>Plataforma gamificada de triagem cognitiva</p>
           <p className={styles.copy}>
             Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e memória em mini-desafios simples.
@@ -50,10 +58,11 @@ export default function Home() {
             <br />
             Os resultados não representam diagnóstico clínico.
           </div>
-          <Link className={styles.playButton} href="/game" aria-label="Jogar Kogniffy AI">
-            Jogar
-            <span aria-hidden="true">→</span>
-          </Link>
+          </section>
+            <Link className={styles.playButton} href="/game" aria-label="Jogar Kogniffy AI">
+                Jogar
+                <span aria-hidden="true">→</span>
+            </Link>
         </section>
         <div className={styles.scene}>
           <MountainKogArt />
