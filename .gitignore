@@ -13,3 +13,4 @@ models/kogniffy/*.bin
 models/kogniffy/model.json
 models/kogniffy/normalization.json
 /.idea
+/data
