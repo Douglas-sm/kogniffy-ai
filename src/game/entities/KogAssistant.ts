@@ -11,7 +11,6 @@ function createKogSvg() {
       <circle cx="80" cy="72" r="15" fill="#6fd6c5"/>
       <circle cx="86" cy="66" r="5" fill="#fff"/>
       <path d="M37 89L16 105M123 89l21 16" stroke="#173b4f" stroke-width="8" stroke-linecap="round"/>
-      <path d="M58 121l-8 16M102 121l8 16" stroke="#f06f59" stroke-width="8" stroke-linecap="round"/>
     </svg>
   `;
 }
@@ -43,19 +42,5 @@ export class KogAssistant {
       ctx.fill();
     }
 
-    ctx.save();
-    ctx.fillStyle = "rgba(255, 249, 233, 0.94)";
-    ctx.strokeStyle = "#173b4f";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(x - 34, y - 26, 172, 30, 12);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#173b4f";
-    ctx.font = "800 13px Trebuchet MS, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Analisando comportamento...", x + 52, y - 11);
-    ctx.restore();
   }
 }

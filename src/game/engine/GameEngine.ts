@@ -26,6 +26,11 @@ export interface PointerPosition {
   y: number;
 }
 
+export interface PointerState extends PointerPosition {
+  inside: boolean;
+  pointerType: string | null;
+}
+
 export interface GameScene {
   id: string;
   title: string;
@@ -37,6 +42,8 @@ export interface GameScene {
   onClick?(engine: GameEngine, pointer: PointerPosition): void;
   onKeyDown?(engine: GameEngine, key: string): void;
   onAutoHelp?(engine: GameEngine): void;
+  getCanvasCursor?(engine: GameEngine): string;
+  drawPointerOverlay?(engine: GameEngine, ctx: CanvasRenderingContext2D): void;
 }
 
 interface GameEngineOptions {
@@ -58,6 +65,12 @@ export class GameEngine {
   readonly hud = new Hud();
   readonly metrics = metricsCollector;
   readonly keys = new Set<string>();
+  readonly pointer: PointerState = {
+    x: GAME_WIDTH / 2,
+    y: GAME_HEIGHT / 2,
+    inside: false,
+    pointerType: null
+  };
 
   private readonly ctx: CanvasRenderingContext2D;
   private readonly scenes: GameScene[];
@@ -66,6 +79,7 @@ export class GameEngine {
   private animationId = 0;
   private lastFrame = 0;
   private errorStreakByScene = new Map<string, number>();
+  private cursorStyle = "default";
 
   timeMs = 0;
 
@@ -94,6 +108,9 @@ export class GameEngine {
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.addEventListener("pointermove", this.handlePointerMove);
+    this.canvas.addEventListener("pointerleave", this.handlePointerLeave);
+    this.syncCanvasCursor();
     this.animationId = window.requestAnimationFrame(this.loop);
   }
 
@@ -114,6 +131,7 @@ export class GameEngine {
     this.errorStreakByScene.clear();
     this.player.reset(90, 360);
     this.currentScene.enter(this);
+    this.syncCanvasCursor();
   }
 
   registerError(sceneId: string) {
@@ -152,6 +170,9 @@ export class GameEngine {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+    this.canvas.removeEventListener("pointerleave", this.handlePointerLeave);
+    this.canvas.style.cursor = "";
   }
 
   private loop = (timestamp: number) => {
@@ -166,6 +187,8 @@ export class GameEngine {
     this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs);
     this.hud.draw(this.ctx, this);
     this.dialogBox.draw(this.ctx);
+    this.currentScene.drawPointerOverlay?.(this, this.ctx);
+    this.syncCanvasCursor();
 
     this.animationId = window.requestAnimationFrame(this.loop);
   };
@@ -196,17 +219,41 @@ export class GameEngine {
     this.keys.delete(key);
   };
 
+  private handlePointerMove = (event: PointerEvent) => {
+    this.updatePointerFromEvent(event, true);
+  };
+
+  private handlePointerLeave = (event: PointerEvent) => {
+    this.pointer.inside = false;
+    this.pointer.pointerType = event.pointerType || this.pointer.pointerType;
+  };
+
   private handlePointerDown = (event: PointerEvent) => {
+    this.updatePointerFromEvent(event, true);
+
     if (this.dialogBox.isActive) {
       return;
     }
 
-    const rect = this.canvas.getBoundingClientRect();
-    const pointer = {
-      x: ((event.clientX - rect.left) / rect.width) * GAME_WIDTH,
-      y: ((event.clientY - rect.top) / rect.height) * GAME_HEIGHT
-    };
-
-    this.currentScene.onClick?.(this, pointer);
+    this.currentScene.onClick?.(this, { x: this.pointer.x, y: this.pointer.y });
   };
+
+  private updatePointerFromEvent(event: PointerEvent, inside: boolean) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.pointer.x = ((event.clientX - rect.left) / rect.width) * GAME_WIDTH;
+    this.pointer.y = ((event.clientY - rect.top) / rect.height) * GAME_HEIGHT;
+    this.pointer.inside = inside;
+    this.pointer.pointerType = event.pointerType || this.pointer.pointerType;
+  }
+
+  private syncCanvasCursor() {
+    const nextCursor = this.currentScene.getCanvasCursor?.(this) ?? "default";
+
+    if (nextCursor === this.cursorStyle) {
+      return;
+    }
+
+    this.cursorStyle = nextCursor;
+    this.canvas.style.cursor = nextCursor;
+  }
 }
