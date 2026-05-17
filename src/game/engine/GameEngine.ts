@@ -145,6 +145,11 @@ export class GameEngine {
 
     this.errorStreakByScene.set(sceneId, 0);
     this.metrics.recordAutoHelp(this.currentScene.title);
+
+    if (sceneId === "letters") {
+      this.metrics.recordDyslexiaAutoHelp();
+    }
+
     const phrase = HELP_LINES[(this.metrics.snapshot().autoHelpCount - 1) % HELP_LINES.length];
     this.dialogBox.setLines([phrase, "Não se preocupe, vamos continuar."], () => {
       this.currentScene.onAutoHelp?.(this);

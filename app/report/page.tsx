@@ -3,7 +3,8 @@
 import type { Chart as ChartInstance } from "chart.js";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { calculateScores } from "@/ai/scoring";
+import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
+import { calculateScores, overrideDyslexiaRisk } from "@/ai/scoring";
 import { loadMetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
 import styles from "./report.module.css";
@@ -26,31 +27,65 @@ function colorForValue(value: number) {
   return "#f06f59";
 }
 
+function buildReportState(report: KogniffyReport, values: number[]): ReportState {
+  return {
+    report,
+    labels: ["Leitura", "Cores", "Atenção", "Memória"],
+    values
+  };
+}
+
 export default function ReportPage() {
   const [state, setState] = useState<ReportState | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<ChartInstance | null>(null);
 
   useEffect(() => {
-    const metrics = loadMetricsSnapshot();
+    let active = true;
 
-    if (!metrics) {
-      return;
+    async function buildState() {
+      const metrics = loadMetricsSnapshot();
+
+      if (!metrics) {
+        return;
+      }
+
+      const heuristicScores = calculateScores(metrics);
+      const heuristicReport = generateReport(metrics, heuristicScores);
+
+      setState(
+        buildReportState(heuristicReport, [
+          heuristicScores.dyslexiaRisk.value,
+          heuristicScores.colorVisionRisk.value,
+          heuristicScores.attentionRisk.value,
+          heuristicScores.memoryReactionRisk.value
+        ])
+      );
+
+      const predictedDyslexiaRisk = await predictDyslexiaRisk(metrics);
+
+      if (!active || predictedDyslexiaRisk === null) {
+        return;
+      }
+
+      const modelScores = overrideDyslexiaRisk(heuristicScores, predictedDyslexiaRisk);
+      const report = generateReport(metrics, modelScores);
+
+      setState(
+        buildReportState(report, [
+          modelScores.dyslexiaRisk.value,
+          modelScores.colorVisionRisk.value,
+          modelScores.attentionRisk.value,
+          modelScores.memoryReactionRisk.value
+        ])
+      );
     }
 
-    const scores = calculateScores(metrics);
-    const report = generateReport(metrics, scores);
+    buildState();
 
-    setState({
-      report,
-      labels: ["Leitura", "Cores", "Atenção", "Memória"],
-      values: [
-        scores.dyslexiaRisk.value,
-        scores.colorVisionRisk.value,
-        scores.attentionRisk.value,
-        scores.memoryReactionRisk.value
-      ]
-    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const chartColors = useMemo(() => state?.values.map(colorForValue) ?? [], [state]);

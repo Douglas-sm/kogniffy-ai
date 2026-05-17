@@ -12,5 +12,8 @@ coverage
 models/kogniffy/*.bin
 models/kogniffy/model.json
 models/kogniffy/normalization.json
+models/dyslexia/*.bin
+models/dyslexia/model.json
+models/dyslexia/normalization.json
 /.idea
 /data

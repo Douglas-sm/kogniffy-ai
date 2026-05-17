@@ -15,7 +15,7 @@ export interface KogniffyScores {
   overallScore: number;
 }
 
-function clampScore(value: number) {
+export function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
@@ -48,12 +48,31 @@ export function bandForScore(score: number): RiskBand {
   return "alto";
 }
 
-function createScore(value: number): RiskScore {
+export function createScore(value: number): RiskScore {
   const normalized = clampScore(value);
 
   return {
     value: normalized,
     band: bandForScore(normalized)
+  };
+}
+
+export function calculateOverallScore(values: number[]) {
+  return clampScore(values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length));
+}
+
+export function overrideDyslexiaRisk(scores: KogniffyScores, value: number): KogniffyScores {
+  const dyslexiaRisk = createScore(value);
+
+  return {
+    ...scores,
+    dyslexiaRisk,
+    overallScore: calculateOverallScore([
+      dyslexiaRisk.value,
+      scores.colorVisionRisk.value,
+      scores.attentionRisk.value,
+      scores.memoryReactionRisk.value
+    ])
   };
 }
 
@@ -95,9 +114,12 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const colorVisionRisk = createScore(colorVisionValue);
   const attentionRisk = createScore(attentionValue);
   const memoryReactionRisk = createScore(memoryValue);
-  const overallScore = clampScore(
-    (dyslexiaRisk.value + colorVisionRisk.value + attentionRisk.value + memoryReactionRisk.value) / 4
-  );
+  const overallScore = calculateOverallScore([
+    dyslexiaRisk.value,
+    colorVisionRisk.value,
+    attentionRisk.value,
+    memoryReactionRisk.value
+  ]);
 
   return {
     dyslexiaRisk,

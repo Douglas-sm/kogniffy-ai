@@ -82,7 +82,7 @@ export class DyslexiaScene implements GameScene {
     this.firstClickRecorded = false;
     this.pendingAdvance = null;
     this.selectedWords = this.pickWords(WORDS_PER_ROUND);
-    this.beginWord(0);
+    this.beginWord(engine, 0);
 
     engine.dialogBox.setLines([
       "Clique nas letras voadoras para formar as palavras.",
@@ -110,7 +110,7 @@ export class DyslexiaScene implements GameScene {
     this.pendingAdvance = null;
 
     if (nextAction === "nextWord") {
-      this.beginWord(this.currentWordIndex + 1);
+      this.beginWord(engine, this.currentWordIndex + 1);
       return;
     }
 
@@ -145,22 +145,29 @@ export class DyslexiaScene implements GameScene {
     }
 
     const now = performance.now();
+    const responseTime = now - this.targetStartedAt;
     engine.metrics.recordAttempt();
-    engine.metrics.recordResponseTime(now - this.targetStartedAt);
+    engine.metrics.recordDyslexiaAttempt();
+    engine.metrics.recordResponseTime(responseTime);
+    engine.metrics.recordDyslexiaResponseTime(responseTime);
 
     if (!this.firstClickRecorded) {
+      const firstClickTime = now - this.wordStartedAt;
       this.firstClickRecorded = true;
-      engine.metrics.recordFirstClickTime(now - this.wordStartedAt);
+      engine.metrics.recordFirstClickTime(firstClickTime);
+      engine.metrics.recordDyslexiaFirstClickTime(firstClickTime);
     }
 
     const expectedChar = this.currentWord()[this.currentLetterIndex];
 
     if (clicked.char === expectedChar) {
       engine.clearErrorStreak(this.id);
+      engine.metrics.recordDyslexiaHit();
       this.startLetterFall(clicked);
       this.currentLetterIndex += 1;
 
       if (this.currentLetterIndex >= this.currentWord().length) {
+        engine.metrics.recordDyslexiaWordCompleted();
         this.pendingAdvance = {
           atMs: engine.timeMs + 650,
           type: this.currentWordIndex >= this.selectedWords.length - 1 ? "completeScene" : "nextWord"
@@ -172,9 +179,12 @@ export class DyslexiaScene implements GameScene {
     }
 
     engine.metrics.recordCorrection();
+    engine.metrics.recordDyslexiaCorrection();
+    engine.metrics.recordDyslexiaMiss();
 
     if (SIMILAR_PAIRS.has(`${expectedChar}${clicked.char}`)) {
       engine.metrics.recordInversionError();
+      engine.metrics.recordDyslexiaInversionError();
     }
 
     this.triggerWrongFeedback(clicked);
@@ -242,7 +252,7 @@ export class DyslexiaScene implements GameScene {
     ctx.restore();
   }
 
-  private beginWord(wordIndex: number) {
+  private beginWord(engine: GameEngine, wordIndex: number) {
     this.currentWordIndex = wordIndex;
     this.currentLetterIndex = 0;
     this.firstClickRecorded = false;
@@ -250,6 +260,7 @@ export class DyslexiaScene implements GameScene {
     this.wordStartedAt = performance.now();
     this.targetStartedAt = this.wordStartedAt;
     this.letters = this.createLettersForWord(this.currentWord());
+    engine.metrics.recordDyslexiaWordStarted();
   }
 
   private complete(engine: GameEngine) {
