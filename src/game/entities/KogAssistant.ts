@@ -25,22 +25,31 @@ export class KogAssistant {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D, playerX: number, playerY: number, timeMs: number) {
-    const x = Math.min(820, playerX + 74);
-    const y = Math.max(88, playerY - 86 + Math.sin(timeMs / 420) * 10);
+  draw(
+    ctx: CanvasRenderingContext2D,
+    playerX: number,
+    playerY: number,
+    timeMs: number,
+    warp: { progress: number } | null = null
+  ) {
+    const warpProgress = warp?.progress ?? 0;
+    const x = Math.min(860, playerX + 50);
+    const y = Math.max(102, playerY - 62 + Math.sin(timeMs / 420) * 8) - warpProgress * 16;
 
+    ctx.save();
+    ctx.globalAlpha = 1 - warpProgress * 0.72;
     if (this.image?.complete) {
-      ctx.drawImage(this.image, x, y, 82, 72);
+      ctx.drawImage(this.image, x, y, 58, 52);
     } else {
       ctx.fillStyle = "#fff9e9";
       ctx.beginPath();
-      ctx.arc(x + 42, y + 40, 28, 0, Math.PI * 2);
+      ctx.arc(x + 29, y + 28, 21, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#6fd6c5";
       ctx.beginPath();
-      ctx.arc(x + 42, y + 40, 12, 0, Math.PI * 2);
+      ctx.arc(x + 29, y + 28, 9, 0, Math.PI * 2);
       ctx.fill();
     }
-
+    ctx.restore();
   }
 }

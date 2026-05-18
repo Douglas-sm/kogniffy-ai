@@ -25,6 +25,9 @@ export class AttentionScene implements GameScene {
   id = "attention";
   title = "Área de obstáculos";
   objective = "Toque apenas nos cristais e pule no momento certo";
+  spawnSide = "left" as const;
+  allowJump = true;
+  exitMode = "portal" as const;
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
   private stimuli: Stimulus[] = [];
@@ -110,7 +113,9 @@ export class AttentionScene implements GameScene {
     drawPanelText(
       ctx,
       "Túnel instável",
-      `Cristais corretos: ${this.correctHits}/5 | Pulso de pulo: ${this.successfulJumps}/2`
+      this.completed
+        ? "Portal aberto no centro. Leve o robô até ele."
+        : `Cristais corretos: ${this.correctHits}/5 | Pulso de pulo: ${this.successfulJumps}/2`
     );
 
     ctx.strokeStyle = "rgba(255, 249, 233, 0.8)";
@@ -192,7 +197,7 @@ export class AttentionScene implements GameScene {
     }
 
     this.completed = true;
-    engine.dialogBox.setLines(["A área instável ficou para trás. Vamos continuar."], () => engine.nextScene());
+    engine.completeScene();
   }
 
   private spawnStimulus(engine: GameEngine) {

@@ -19,8 +19,8 @@ export default function GamePage() {
 
         <section className={styles.help} aria-label="Controles">
           <div className={styles.helpItem}>Setas: mover</div>
-          <div className={styles.helpItem}>Espaço: pular</div>
-          <div className={styles.helpItem}>Enter: avançar diálogos</div>
+          <div className={styles.helpItem}>Espaço: pular quando a fase pedir</div>
+          <div className={styles.helpItem}>Clique/toque: avançar falas e interagir</div>
         </section>
 
         <p className={styles.notice}>

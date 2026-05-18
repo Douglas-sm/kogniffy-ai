@@ -12,6 +12,9 @@ export class FinalScene implements GameScene {
   id = "final";
   title = "Saída da montanha";
   objective = "Veja o resumo e abra o relatório";
+  spawnSide = "left" as const;
+  allowJump = false;
+  exitMode = "none" as const;
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
   private readonly reportButton: ButtonRect = {
@@ -64,12 +67,6 @@ export class FinalScene implements GameScene {
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
     if (pointInRect(pointer, this.reportButton)) {
-      engine.finishAndOpenReport();
-    }
-  }
-
-  onKeyDown(engine: GameEngine, key: string) {
-    if (key === "Enter" && !engine.dialogBox.isActive) {
       engine.finishAndOpenReport();
     }
   }

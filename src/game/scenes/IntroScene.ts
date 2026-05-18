@@ -1,54 +1,71 @@
-import type { GameEngine, GameScene, Platform } from "@/game/engine/GameEngine";
-import { drawCaveBackground, drawPanelText, drawPlatform } from "@/game/scenes/sceneUtils";
+import type { GameEngine, GameScene, Platform, Rect } from "@/game/engine/GameEngine";
+import {
+  drawCaveBackground,
+  drawCaveEntrance,
+  drawGoalArrow,
+  drawPanelText,
+  drawPlatform
+} from "@/game/scenes/sceneUtils";
 
 export class IntroScene implements GameScene {
   id = "intro";
   title = "Entrada da montanha";
-  objective = "Ajude Kog a chegar ao primeiro túnel";
-  platforms: Platform[] = [
-    { x: 0, y: 454, width: 960, height: 86 },
-    { x: 360, y: 368, width: 170, height: 24 },
-    { x: 610, y: 316, width: 180, height: 24 }
-  ];
+  objective = "Ande em linha reta até a entrada da caverna";
+  spawnSide = "right" as const;
+  allowJump = false;
+  exitMode = "cave" as const;
+  platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
-  private completed = false;
+  private readonly entrance: Rect = {
+    x: 116,
+    y: 346,
+    width: 138,
+    height: 108
+  };
 
   enter(engine: GameEngine) {
-    this.completed = false;
-    engine.player.setCheckpoint(90, 360);
     engine.dialogBox.setLines([
-      "Use as setas para se mover.",
-      "Pressione espaço para pular.",
-      "Minha nave caiu do outro lado da montanha. Vamos atravessar por dentro juntos."
+      "Kog perdeu a nave e ficou preso do outro lado da montanha. A melhor saída é entrar pela caverna e atravessar por dentro.",
+      "Use as setas esquerda e direita para andar em linha reta até a entrada da caverna. Quando você chegar lá, a próxima fase abre sozinha."
     ]);
   }
 
-  update(engine: GameEngine) {
-    if (!this.completed && engine.player.x > 760 && engine.player.y < 360) {
-      this.completed = true;
-      engine.dialogBox.setLines(["Vamos continuar."], () => engine.nextScene());
-    }
+  update() {
+    return;
   }
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     drawCaveBackground(ctx, engine.timeMs, "#6fd6c5");
 
-    ctx.fillStyle = "#f6c55f";
+    ctx.fillStyle = "#2f4b58";
     ctx.beginPath();
-    ctx.roundRect(790, 214, 86, 118, 18);
+    ctx.moveTo(0, 454);
+    ctx.lineTo(0, 228);
+    ctx.quadraticCurveTo(58, 156, 154, 162);
+    ctx.quadraticCurveTo(282, 174, 326, 454);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "#173b4f";
-    ctx.lineWidth = 6;
-    ctx.stroke();
-    ctx.fillStyle = "#6fd6c5";
+
+    ctx.fillStyle = "#426171";
     ctx.beginPath();
-    ctx.arc(833, 274, 22 + Math.sin(engine.timeMs / 240) * 4, 0, Math.PI * 2);
+    ctx.moveTo(0, 454);
+    ctx.lineTo(0, 272);
+    ctx.quadraticCurveTo(48, 222, 118, 226);
+    ctx.quadraticCurveTo(204, 232, 248, 454);
+    ctx.closePath();
     ctx.fill();
+
+    drawCaveEntrance(ctx, this.entrance);
+    drawGoalArrow(ctx, this.entrance.x + this.entrance.width / 2, this.entrance.y - 42, engine.timeMs);
 
     for (const platform of this.platforms) {
       drawPlatform(ctx, platform);
     }
 
-    drawPanelText(ctx, "Kog está preso na entrada", "Suba nas plataformas e alcance o portão iluminado.");
+    drawPanelText(ctx, "Entrada da montanha", "Siga reto até o buraco da caverna marcado pela seta vermelha.");
+  }
+
+  getExitZone() {
+    return this.entrance;
   }
 }

@@ -1,5 +1,17 @@
 import type { Platform } from "@/game/engine/GameEngine";
 
+interface PlayerUpdateOptions {
+  allowJump: boolean;
+  controlsEnabled: boolean;
+  freeze: boolean;
+}
+
+export interface PlayerDrawWarpEffect {
+  progress: number;
+  targetX: number;
+  targetY: number;
+}
+
 export class Player {
   x = 90;
   y = 360;
@@ -29,7 +41,13 @@ export class Player {
     this.checkpoint = { x, y };
   }
 
-  update(keys: Set<string>, platforms: Platform[], dt: number) {
+  update(keys: Set<string>, platforms: Platform[], dt: number, options: PlayerUpdateOptions) {
+    if (options.freeze) {
+      this.velocityX = 0;
+      this.velocityY = 0;
+      return;
+    }
+
     const moveSpeed = 260;
     const gravity = 1550;
     const jumpForce = 620;
@@ -39,11 +57,11 @@ export class Player {
 
     this.velocityX = 0;
 
-    if (keys.has("ArrowLeft")) {
+    if (options.controlsEnabled && keys.has("ArrowLeft")) {
       this.velocityX = -moveSpeed;
     }
 
-    if (keys.has("ArrowRight")) {
+    if (options.controlsEnabled && keys.has("ArrowRight")) {
       this.velocityX = moveSpeed;
     }
 
@@ -51,7 +69,7 @@ export class Player {
       this.facing = this.velocityX > 0 ? 1 : -1;
     }
 
-    if (keys.has("Space") && this.grounded) {
+    if (options.allowJump && options.controlsEnabled && keys.has("Space") && this.grounded) {
       this.velocityY = -jumpForce;
       this.grounded = false;
       this.jumpBurst = 1;
@@ -96,8 +114,9 @@ export class Player {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D, timeMs: number) {
+  draw(ctx: CanvasRenderingContext2D, timeMs: number, warp: PlayerDrawWarpEffect | null = null) {
     const centerX = this.x + this.width / 2;
+    const warpProgress = warp?.progress ?? 0;
     const driveRatio = Math.min(1, Math.abs(this.velocityX) / 260);
     const bounce = this.grounded ? Math.sin(timeMs / 110) * (0.5 + driveRatio * 1.2) : 0;
     const airborneRatio = this.grounded ? 0 : Math.min(1, Math.abs(this.velocityY) / 720 + 0.14);
@@ -107,15 +126,33 @@ export class Player {
     const wheelY = 44 + this.jumpBurst * 1.8 + this.landingCompression * 2.2;
     const shadowScaleX = 1 - airborneRatio * 0.35 + driveRatio * 0.06;
     const shadowScaleY = 1 - airborneRatio * 0.22 + this.landingCompression * 0.1;
+    const targetX = warp?.targetX ?? centerX;
+    const targetY = warp?.targetY ?? this.y + 8;
+    const drawCenterX = centerX + (targetX - centerX) * warpProgress;
+    const drawCenterY = this.y + 4 + bounce + (targetY - (this.y + 4 + bounce)) * warpProgress;
+    const drawScale = 1 - warpProgress * 0.74;
+    const drawAlpha = 1 - warpProgress * 0.6;
+    const shadowY = this.y + this.height + 8 + (targetY - (this.y + this.height + 8)) * warpProgress;
 
     ctx.save();
+    ctx.globalAlpha = drawAlpha * 0.45;
     ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
     ctx.beginPath();
-    ctx.ellipse(centerX, this.y + this.height + 8, 22 * shadowScaleX, 7 * shadowScaleY, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      drawCenterX,
+      shadowY,
+      22 * shadowScaleX * (1 - warpProgress * 0.35),
+      7 * shadowScaleY * (1 - warpProgress * 0.2),
+      0,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
+    ctx.globalAlpha = drawAlpha;
 
-    ctx.translate(centerX, this.y + 4 + bounce);
+    ctx.translate(drawCenterX, drawCenterY);
     ctx.rotate(bodyTilt);
+    ctx.scale(drawScale, drawScale);
 
     ctx.strokeStyle = "#173b4f";
     ctx.lineWidth = 3;

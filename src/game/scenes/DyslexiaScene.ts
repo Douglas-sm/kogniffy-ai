@@ -63,6 +63,9 @@ export class DyslexiaScene implements GameScene {
   id = "letters";
   title = "Caverna das letras";
   objective = "Forme as palavras";
+  spawnSide = "left" as const;
+  allowJump = false;
+  exitMode = "portal" as const;
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
   private letters: FlyingLetter[] = [];
@@ -123,7 +126,11 @@ export class DyslexiaScene implements GameScene {
       drawPlatform(ctx, platform);
     }
 
-    drawPanelText(ctx, "Letras mágicas", this.renderHeaderLine());
+    drawPanelText(
+      ctx,
+      "Letras mágicas",
+      this.completed ? "Portal aberto no centro. Leve o robô até ele para continuar." : this.renderHeaderLine()
+    );
 
     for (const letter of this.letters) {
       this.drawFlyingLetter(ctx, letter, engine.timeMs);
@@ -197,6 +204,10 @@ export class DyslexiaScene implements GameScene {
   }
 
   getCanvasCursor(engine: GameEngine) {
+    if (this.completed) {
+      return "default";
+    }
+
     return engine.pointer.pointerType === "mouse" ? "none" : "default";
   }
 
@@ -269,7 +280,8 @@ export class DyslexiaScene implements GameScene {
     }
 
     this.completed = true;
-    engine.dialogBox.setLines(["As palavras abriram a passagem. Vamos continuar."], () => engine.nextScene());
+    this.pendingAdvance = null;
+    engine.completeScene();
   }
 
   private currentWord() {
@@ -397,7 +409,11 @@ export class DyslexiaScene implements GameScene {
     ctx.font = "900 24px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(
-      this.pendingAdvance ? "Palavra completa! Prepare a próxima." : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`,
+      this.completed
+        ? "As palavras já abriram o portal."
+        : this.pendingAdvance
+          ? "Palavra completa! Prepare a próxima."
+          : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`,
       480,
       374
     );

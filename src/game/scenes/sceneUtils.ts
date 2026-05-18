@@ -1,4 +1,4 @@
-import type { Platform, PointerPosition } from "@/game/engine/GameEngine";
+import type { Platform, PointerPosition, Rect } from "@/game/engine/GameEngine";
 
 export interface ButtonRect {
   x: number;
@@ -74,6 +74,144 @@ export function drawPlatform(ctx: CanvasRenderingContext2D, platform: Platform) 
   ctx.fill();
   ctx.fillStyle = "#6fd6c5";
   ctx.fillRect(platform.x + 12, platform.y + 8, platform.width - 24, 6);
+}
+
+export function drawCaveEntrance(ctx: CanvasRenderingContext2D, rect: Rect) {
+  ctx.save();
+  ctx.fillStyle = "#102430";
+  ctx.beginPath();
+  ctx.ellipse(rect.x + rect.width / 2, rect.y + rect.height * 0.58, rect.width / 2, rect.height / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255, 249, 233, 0.08)";
+  ctx.beginPath();
+  ctx.ellipse(
+    rect.x + rect.width / 2 - 14,
+    rect.y + rect.height * 0.52,
+    rect.width * 0.24,
+    rect.height * 0.18,
+    -0.4,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+
+  ctx.strokeStyle = "#173b4f";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawGoalArrow(ctx: CanvasRenderingContext2D, x: number, y: number, timeMs: number) {
+  const floatY = Math.sin(timeMs / 160) * 6;
+
+  ctx.save();
+  ctx.translate(x, y + floatY);
+  ctx.fillStyle = "#dd3b43";
+  ctx.strokeStyle = "#7c161c";
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 26);
+  ctx.lineTo(-14, 6);
+  ctx.lineTo(-5, 6);
+  ctx.lineTo(-5, -18);
+  ctx.lineTo(5, -18);
+  ctx.lineTo(5, 6);
+  ctx.lineTo(14, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawPortal(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  timeMs: number,
+  revealProgress: number,
+  warpProgress = 0
+) {
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  const scale = 0.35 + revealProgress * 0.65;
+  const pulse = 1 + Math.sin(timeMs / 180) * 0.05 + warpProgress * 0.12;
+  const ringAlpha = 0.52 + warpProgress * 0.28;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = `rgba(111, 214, 197, ${0.18 + revealProgress * 0.28})`;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rect.width * 0.95 * pulse, rect.height * 0.72 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#173b4f";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rect.width * 0.52, rect.height * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(111, 214, 197, ${ringAlpha})`;
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rect.width * 0.5 * pulse, rect.height * 0.4 * pulse, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#f6c55f";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rect.width * 0.64 * pulse, rect.height * 0.5 * pulse, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  for (let index = 0; index < 10; index += 1) {
+    const angle = timeMs / 360 + index * 0.63;
+    const radiusX = rect.width * (0.26 + (index % 3) * 0.08) * pulse;
+    const radiusY = rect.height * (0.18 + (index % 4) * 0.05) * pulse;
+    const sparkX = Math.cos(angle) * radiusX;
+    const sparkY = Math.sin(angle) * radiusY;
+    const sparkSize = 3 + (index % 3);
+
+    ctx.fillStyle = index % 2 === 0 ? "#fff9e9" : "#6fd6c5";
+    ctx.beginPath();
+    ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+export function drawPortalHint(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  timeMs: number,
+  revealProgress: number,
+  message = "Vá ao portal para seguir para a próxima fase"
+) {
+  const centerX = rect.x + rect.width / 2;
+  const cardWidth = 374;
+  const cardHeight = 42;
+  const cardX = centerX - cardWidth / 2;
+  const cardY = rect.y - 108;
+
+  ctx.save();
+  ctx.globalAlpha = revealProgress;
+
+  drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 15);
+  ctx.fillStyle = "rgba(255, 249, 233, 0.96)";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#173b4f";
+  ctx.stroke();
+
+  ctx.fillStyle = "#173b4f";
+  ctx.font = "900 16px Trebuchet MS, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(message, centerX, cardY + cardHeight / 2 + 1);
+
+  ctx.restore();
+
+  drawGoalArrow(ctx, centerX, rect.y - 52, timeMs);
 }
 
 export function drawChoiceButton(ctx: CanvasRenderingContext2D, rect: ButtonRect, active = false) {

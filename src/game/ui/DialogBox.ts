@@ -56,7 +56,7 @@ export class DialogBox {
     ctx.fillStyle = "#426171";
     ctx.font = "800 14px Trebuchet MS, sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText("Enter", 884, 476);
+    ctx.fillText("Clique ou toque", 884, 476);
   }
 
   private wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {

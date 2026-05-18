@@ -24,6 +24,9 @@ export class ColorScene implements GameScene {
   id = "colors";
   title = "Portão tecnológico";
   objective = "Identifique o código escondido nas cores";
+  spawnSide = "right" as const;
+  allowJump = false;
+  exitMode = "portal" as const;
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
   private trials: SceneTrial[] = [];
@@ -80,7 +83,7 @@ export class ColorScene implements GameScene {
     drawPanelText(
       ctx,
       "Código cromático",
-      trial?.prompt ?? "Portão desbloqueado. O código foi aceito."
+      this.completed ? "O portal abriu no centro. Caminhe até ele para seguir." : trial?.prompt ?? "Portão desbloqueado. O código foi aceito."
     );
 
     if (!trial) {
@@ -178,7 +181,7 @@ export class ColorScene implements GameScene {
     }
 
     this.completed = true;
-    engine.dialogBox.setLines(["O portão respondeu ao código. Vamos continuar."], () => engine.nextScene());
+    engine.completeScene();
   }
 
   private optionRects(trial: SceneTrial): ButtonRect[] {

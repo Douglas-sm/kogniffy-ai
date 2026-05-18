@@ -14,6 +14,9 @@ export class MemoryReactionScene implements GameScene {
   id = "memory";
   title = "Nave do Kog";
   objective = "Repita a sequência do painel";
+  spawnSide = "left" as const;
+  allowJump = false;
+  exitMode = "portal" as const;
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
   private readonly pattern = [0, 2, 1, 3, 2];
@@ -155,12 +158,14 @@ export class MemoryReactionScene implements GameScene {
 
     this.completed = true;
     this.phase = "complete";
-    engine.dialogBox.setLines(["A nave recebeu a sequência. Conseguimos chegar ao fim da montanha."], () =>
-      engine.nextScene()
-    );
+    engine.completeScene();
   }
 
   private instructionText() {
+    if (this.completed) {
+      return "Portal aberto no centro. Leve o robô até ele para concluir a travessia.";
+    }
+
     if (this.phase === "showing") {
       return `Observe a ordem com atenção. Sequência ${this.sequence.length}.`;
     }

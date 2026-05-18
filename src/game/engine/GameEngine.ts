@@ -7,6 +7,7 @@ import { DyslexiaScene } from "@/game/scenes/DyslexiaScene";
 import { FinalScene } from "@/game/scenes/FinalScene";
 import { IntroScene } from "@/game/scenes/IntroScene";
 import { MemoryReactionScene } from "@/game/scenes/MemoryReactionScene";
+import { drawPortal, drawPortalHint } from "@/game/scenes/sceneUtils";
 import { DialogBox } from "@/game/ui/DialogBox";
 import { Hud } from "@/game/ui/Hud";
 import { metricsCollector, saveMetricsSnapshot } from "@/metrics/metricsCollector";
@@ -15,6 +16,13 @@ export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
 
 export interface Platform {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Rect {
   x: number;
   y: number;
   width: number;
@@ -31,10 +39,16 @@ export interface PointerState extends PointerPosition {
   pointerType: string | null;
 }
 
+export type SceneSpawnSide = "left" | "right";
+export type SceneExitMode = "none" | "cave" | "portal";
+
 export interface GameScene {
   id: string;
   title: string;
   objective: string;
+  spawnSide: SceneSpawnSide;
+  allowJump: boolean;
+  exitMode: SceneExitMode;
   platforms: Platform[];
   enter(engine: GameEngine): void;
   update(engine: GameEngine, dt: number): void;
@@ -44,6 +58,7 @@ export interface GameScene {
   onAutoHelp?(engine: GameEngine): void;
   getCanvasCursor?(engine: GameEngine): string;
   drawPointerOverlay?(engine: GameEngine, ctx: CanvasRenderingContext2D): void;
+  getExitZone?(engine: GameEngine): Rect | null;
 }
 
 interface GameEngineOptions {
@@ -59,6 +74,14 @@ const HELP_LINES = [
 ];
 
 export class GameEngine {
+  private static readonly PLAYER_SPAWN_MARGIN = 72;
+  private static readonly PORTAL_ZONE: Rect = {
+    x: GAME_WIDTH / 2 - 46,
+    y: 334,
+    width: 92,
+    height: 120
+  };
+
   readonly player = new Player();
   readonly kog = new KogAssistant();
   readonly dialogBox = new DialogBox();
@@ -80,6 +103,8 @@ export class GameEngine {
   private lastFrame = 0;
   private errorStreakByScene = new Map<string, number>();
   private cursorStyle = "default";
+  private sceneExitState: "idle" | "opening" | "ready" | "warping" = "idle";
+  private sceneExitStartedAt = 0;
 
   timeMs = 0;
 
@@ -104,7 +129,7 @@ export class GameEngine {
     ];
 
     this.metrics.reset();
-    this.currentScene.enter(this);
+    this.enterScene();
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);
@@ -127,11 +152,13 @@ export class GameEngine {
   }
 
   nextScene() {
-    this.currentSceneIndex = Math.min(this.currentSceneIndex + 1, this.scenes.length - 1);
+    if (this.currentSceneIndex >= this.scenes.length - 1) {
+      return;
+    }
+
+    this.currentSceneIndex += 1;
     this.errorStreakByScene.clear();
-    this.player.reset(90, 360);
-    this.currentScene.enter(this);
-    this.syncCanvasCursor();
+    this.enterScene();
   }
 
   registerError(sceneId: string) {
@@ -170,6 +197,16 @@ export class GameEngine {
     this.onComplete();
   }
 
+  completeScene() {
+    if (this.currentScene.exitMode !== "portal" || this.sceneExitState !== "idle") {
+      return;
+    }
+
+    this.keys.clear();
+    this.sceneExitState = "opening";
+    this.sceneExitStartedAt = this.timeMs;
+  }
+
   liveOverallScore() {
     return calculateScores(this.metrics.snapshot()).overallScore;
   }
@@ -189,11 +226,18 @@ export class GameEngine {
     this.lastFrame = timestamp;
     this.timeMs = timestamp;
 
-    this.player.update(this.keys, this.currentScene.platforms, dt);
+    this.player.update(this.keys, this.currentScene.platforms, dt, {
+      allowJump: this.currentScene.allowJump && this.sceneExitState === "idle",
+      controlsEnabled: !this.dialogBox.isActive && this.sceneExitState !== "warping",
+      freeze: this.sceneExitState === "warping"
+    });
     this.currentScene.update(this, dt);
+    this.updateSceneExit();
     this.currentScene.draw(this, this.ctx);
-    this.player.draw(this.ctx, this.timeMs);
-    this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs);
+    this.drawSceneExit();
+    const warpEffect = this.getWarpEffect();
+    this.player.draw(this.ctx, this.timeMs, warpEffect);
+    this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs, warpEffect);
     this.hud.draw(this.ctx, this);
     this.dialogBox.draw(this.ctx);
     this.currentScene.drawPointerOverlay?.(this, this.ctx);
@@ -205,21 +249,14 @@ export class GameEngine {
   private handleKeyDown = (event: KeyboardEvent) => {
     const key = event.code === "Space" ? "Space" : event.key;
 
-    if (["ArrowLeft", "ArrowRight", "Space", "Enter"].includes(key)) {
+    if (["ArrowLeft", "ArrowRight", "Space"].includes(key)) {
       event.preventDefault();
     }
 
-    if (key === "Enter" && this.dialogBox.isActive) {
-      this.dialogBox.advance();
-      return;
+    if (["ArrowLeft", "ArrowRight", "Space"].includes(key)) {
+      this.keys.add(key);
     }
 
-    if (key === "Enter") {
-      this.currentScene.onKeyDown?.(this, key);
-      return;
-    }
-
-    this.keys.add(key);
     this.currentScene.onKeyDown?.(this, key);
   };
 
@@ -241,6 +278,7 @@ export class GameEngine {
     this.updatePointerFromEvent(event, true);
 
     if (this.dialogBox.isActive) {
+      this.dialogBox.advance();
       return;
     }
 
@@ -264,5 +302,128 @@ export class GameEngine {
 
     this.cursorStyle = nextCursor;
     this.canvas.style.cursor = nextCursor;
+  }
+
+  private enterScene() {
+    this.keys.clear();
+    this.sceneExitState = this.currentScene.exitMode === "cave" ? "ready" : "idle";
+    this.sceneExitStartedAt = 0;
+
+    const spawn = this.sceneSpawnPosition(this.currentScene.spawnSide);
+    this.player.setCheckpoint(spawn.x, spawn.y);
+    this.player.reset(spawn.x, spawn.y);
+
+    this.currentScene.enter(this);
+    this.syncCanvasCursor();
+  }
+
+  private sceneSpawnPosition(side: SceneSpawnSide) {
+    const floorY = this.currentScene.platforms.length
+      ? Math.max(...this.currentScene.platforms.map((platform) => platform.y))
+      : 454;
+    const x =
+      side === "left"
+        ? GameEngine.PLAYER_SPAWN_MARGIN
+        : GAME_WIDTH - GameEngine.PLAYER_SPAWN_MARGIN - this.player.width;
+
+    return {
+      x,
+      y: floorY - this.player.height
+    };
+  }
+
+  private updateSceneExit() {
+    if (this.sceneExitState === "warping") {
+      if (this.timeMs - this.sceneExitStartedAt >= 560) {
+        this.nextScene();
+      }
+      return;
+    }
+
+    if (this.currentScene.exitMode === "portal") {
+      if (this.sceneExitState === "opening" && this.timeMs - this.sceneExitStartedAt >= 420) {
+        this.sceneExitState = "ready";
+      }
+
+      if (this.sceneExitState === "ready" && this.playerTouchesRect(GameEngine.PORTAL_ZONE)) {
+        this.beginWarp();
+      }
+      return;
+    }
+
+    if (this.currentScene.exitMode === "cave" && !this.dialogBox.isActive) {
+      const exitZone = this.currentScene.getExitZone?.(this);
+
+      if (exitZone && this.playerTouchesRect(exitZone)) {
+        this.beginWarp();
+      }
+    }
+  }
+
+  private drawSceneExit() {
+    if (this.currentScene.exitMode !== "portal" || this.sceneExitState === "idle") {
+      return;
+    }
+
+    const revealProgress =
+      this.sceneExitState === "opening"
+        ? Math.min(1, (this.timeMs - this.sceneExitStartedAt) / 420)
+        : 1;
+    const warpProgress =
+      this.sceneExitState === "warping"
+        ? Math.min(1, (this.timeMs - this.sceneExitStartedAt) / 560)
+        : 0;
+
+    drawPortal(this.ctx, GameEngine.PORTAL_ZONE, this.timeMs, revealProgress, warpProgress);
+    drawPortalHint(this.ctx, GameEngine.PORTAL_ZONE, this.timeMs, revealProgress);
+  }
+
+  private getWarpEffect() {
+    if (this.sceneExitState !== "warping") {
+      return null;
+    }
+
+    const target = this.currentExitRect();
+
+    if (!target) {
+      return null;
+    }
+
+    return {
+      progress: Math.min(1, (this.timeMs - this.sceneExitStartedAt) / 560),
+      targetX: target.x + target.width / 2,
+      targetY: target.y + target.height / 2
+    };
+  }
+
+  private currentExitRect() {
+    if (this.currentScene.exitMode === "portal") {
+      return GameEngine.PORTAL_ZONE;
+    }
+
+    if (this.currentScene.exitMode === "cave") {
+      return this.currentScene.getExitZone?.(this) ?? null;
+    }
+
+    return null;
+  }
+
+  private beginWarp() {
+    if (this.sceneExitState === "warping") {
+      return;
+    }
+
+    this.keys.clear();
+    this.sceneExitState = "warping";
+    this.sceneExitStartedAt = this.timeMs;
+  }
+
+  private playerTouchesRect(rect: Rect) {
+    return (
+      this.player.x + this.player.width > rect.x &&
+      this.player.x < rect.x + rect.width &&
+      this.player.y + this.player.height > rect.y &&
+      this.player.y < rect.y + rect.height
+    );
   }
 }
