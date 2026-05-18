@@ -1,6 +1,8 @@
+import type { ColorCharacterType, ColorDifficulty, ColorPlateType } from "@/colorblind/plates";
+
 export const METRICS_SESSION_KEY = "kogniffy.metrics.v1";
 
-export type ContrastErrorType = "redGreen" | "blueYellow" | "lowContrast";
+export type ContrastErrorType = ColorPlateType;
 
 export interface AutoHelpRecord {
   scene: string;
@@ -20,6 +22,36 @@ export interface DyslexiaPhaseSnapshot {
   autoHelpCount: number;
 }
 
+export interface ColorResponseRecord {
+  target: string;
+  selected: string;
+  correct: boolean;
+  trialType: ColorPlateType;
+  difficulty: ColorDifficulty;
+  charType: ColorCharacterType;
+  responseTimeMs: number;
+  optionSet: string[];
+  trialIndex: number;
+  usedAutoHelp: boolean;
+}
+
+export interface ColorPhaseSnapshot {
+  startedTrials: number;
+  completedTrials: number;
+  attempts: number;
+  hits: number;
+  misses: number;
+  responseTimes: number[];
+  autoHelpCount: number;
+  firstChoiceMisses: number;
+  letterTrials: number;
+  numberTrials: number;
+  redGreenTrials: number;
+  blueYellowTrials: number;
+  lowContrastTrials: number;
+  responses: ColorResponseRecord[];
+}
+
 export interface MetricsSnapshot {
   startedAt: number;
   completedAt: number | null;
@@ -32,6 +64,7 @@ export interface MetricsSnapshot {
   contrastErrors: number;
   redGreenErrors: number;
   blueYellowErrors: number;
+  lowContrastErrors: number;
   inversionErrors: number;
   missedTargets: number;
   autoHelpCount: number;
@@ -43,6 +76,7 @@ export interface MetricsSnapshot {
   sequenceErrors: number;
   maxSequenceLength: number;
   dyslexiaPhase: DyslexiaPhaseSnapshot;
+  colorPhase: ColorPhaseSnapshot;
 }
 
 function createEmptyDyslexiaPhase(): DyslexiaPhaseSnapshot {
@@ -60,11 +94,45 @@ function createEmptyDyslexiaPhase(): DyslexiaPhaseSnapshot {
   };
 }
 
+function createEmptyColorPhase(): ColorPhaseSnapshot {
+  return {
+    startedTrials: 0,
+    completedTrials: 0,
+    attempts: 0,
+    hits: 0,
+    misses: 0,
+    responseTimes: [],
+    autoHelpCount: 0,
+    firstChoiceMisses: 0,
+    letterTrials: 0,
+    numberTrials: 0,
+    redGreenTrials: 0,
+    blueYellowTrials: 0,
+    lowContrastTrials: 0,
+    responses: []
+  };
+}
+
 function cloneDyslexiaPhase(snapshot: DyslexiaPhaseSnapshot): DyslexiaPhaseSnapshot {
   return {
     ...snapshot,
     responseTimes: [...snapshot.responseTimes],
     firstClickTimes: [...snapshot.firstClickTimes]
+  };
+}
+
+function cloneColorResponseRecord(record: ColorResponseRecord): ColorResponseRecord {
+  return {
+    ...record,
+    optionSet: [...record.optionSet]
+  };
+}
+
+function cloneColorPhase(snapshot: ColorPhaseSnapshot): ColorPhaseSnapshot {
+  return {
+    ...snapshot,
+    responseTimes: [...snapshot.responseTimes],
+    responses: snapshot.responses.map(cloneColorResponseRecord)
   };
 }
 
@@ -92,6 +160,14 @@ function toNumberArray(value: unknown) {
   return value
     .filter((item): item is number => typeof item === "number" && Number.isFinite(item))
     .map((item) => Math.max(0, Math.round(item)));
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 function toAutoHelpRecords(value: unknown): AutoHelpRecord[] {
@@ -129,6 +205,59 @@ function toDyslexiaPhaseSnapshot(value: unknown): DyslexiaPhaseSnapshot {
   };
 }
 
+function toColorResponseRecords(value: unknown): ColorResponseRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Partial<ColorResponseRecord> => typeof item === "object" && item !== null)
+    .map((record) => ({
+      target: typeof record.target === "string" ? record.target : "",
+      selected: typeof record.selected === "string" ? record.selected : "",
+      correct: Boolean(record.correct),
+      trialType:
+        record.trialType === "redGreen" || record.trialType === "blueYellow" || record.trialType === "lowContrast"
+          ? record.trialType
+          : "lowContrast",
+      difficulty:
+        record.difficulty === "medium" || record.difficulty === "hard" || record.difficulty === "expert"
+          ? record.difficulty
+          : "medium",
+      charType: record.charType === "digit" || record.charType === "letter" ? record.charType : "digit",
+      responseTimeMs: toNonNegativeInteger(record.responseTimeMs),
+      optionSet: toStringArray(record.optionSet),
+      trialIndex: toNonNegativeInteger(record.trialIndex),
+      usedAutoHelp: Boolean(record.usedAutoHelp)
+    }))
+    .filter((record) => record.target.length > 0 && record.selected.length > 0);
+}
+
+function toColorPhaseSnapshot(value: unknown): ColorPhaseSnapshot {
+  if (typeof value !== "object" || value === null) {
+    return createEmptyColorPhase();
+  }
+
+  const phase = value as Partial<ColorPhaseSnapshot>;
+
+  return {
+    startedTrials: toNonNegativeInteger(phase.startedTrials),
+    completedTrials: toNonNegativeInteger(phase.completedTrials),
+    attempts: toNonNegativeInteger(phase.attempts),
+    hits: toNonNegativeInteger(phase.hits),
+    misses: toNonNegativeInteger(phase.misses),
+    responseTimes: toNumberArray(phase.responseTimes),
+    autoHelpCount: toNonNegativeInteger(phase.autoHelpCount),
+    firstChoiceMisses: toNonNegativeInteger(phase.firstChoiceMisses),
+    letterTrials: toNonNegativeInteger(phase.letterTrials),
+    numberTrials: toNonNegativeInteger(phase.numberTrials),
+    redGreenTrials: toNonNegativeInteger(phase.redGreenTrials),
+    blueYellowTrials: toNonNegativeInteger(phase.blueYellowTrials),
+    lowContrastTrials: toNonNegativeInteger(phase.lowContrastTrials),
+    responses: toColorResponseRecords(phase.responses)
+  };
+}
+
 function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -148,6 +277,7 @@ function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
     contrastErrors: toNonNegativeInteger(snapshot.contrastErrors),
     redGreenErrors: toNonNegativeInteger(snapshot.redGreenErrors),
     blueYellowErrors: toNonNegativeInteger(snapshot.blueYellowErrors),
+    lowContrastErrors: toNonNegativeInteger(snapshot.lowContrastErrors),
     inversionErrors: toNonNegativeInteger(snapshot.inversionErrors),
     missedTargets: toNonNegativeInteger(snapshot.missedTargets),
     autoHelpCount: toNonNegativeInteger(snapshot.autoHelpCount),
@@ -158,7 +288,8 @@ function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
     reactionTimes: toNumberArray(snapshot.reactionTimes),
     sequenceErrors: toNonNegativeInteger(snapshot.sequenceErrors),
     maxSequenceLength: toNonNegativeInteger(snapshot.maxSequenceLength),
-    dyslexiaPhase: toDyslexiaPhaseSnapshot(snapshot.dyslexiaPhase)
+    dyslexiaPhase: toDyslexiaPhaseSnapshot(snapshot.dyslexiaPhase),
+    colorPhase: toColorPhaseSnapshot(snapshot.colorPhase)
   };
 }
 
@@ -175,6 +306,7 @@ function createEmptySnapshot(): MetricsSnapshot {
     contrastErrors: 0,
     redGreenErrors: 0,
     blueYellowErrors: 0,
+    lowContrastErrors: 0,
     inversionErrors: 0,
     missedTargets: 0,
     autoHelpCount: 0,
@@ -185,7 +317,8 @@ function createEmptySnapshot(): MetricsSnapshot {
     reactionTimes: [],
     sequenceErrors: 0,
     maxSequenceLength: 0,
-    dyslexiaPhase: createEmptyDyslexiaPhase()
+    dyslexiaPhase: createEmptyDyslexiaPhase(),
+    colorPhase: createEmptyColorPhase()
   };
 }
 
@@ -197,7 +330,8 @@ function cloneSnapshot(snapshot: MetricsSnapshot): MetricsSnapshot {
     autoHelps: snapshot.autoHelps.map((record) => ({ ...record })),
     firstClickTimes: [...snapshot.firstClickTimes],
     reactionTimes: [...snapshot.reactionTimes],
-    dyslexiaPhase: cloneDyslexiaPhase(snapshot.dyslexiaPhase)
+    dyslexiaPhase: cloneDyslexiaPhase(snapshot.dyslexiaPhase),
+    colorPhase: cloneColorPhase(snapshot.colorPhase)
   };
 }
 
@@ -245,6 +379,10 @@ export class MetricsCollector {
 
     if (type === "blueYellow") {
       this.data.blueYellowErrors += 1;
+    }
+
+    if (type === "lowContrast") {
+      this.data.lowContrastErrors += 1;
     }
   }
 
@@ -322,6 +460,52 @@ export class MetricsCollector {
 
   recordDyslexiaAutoHelp() {
     this.data.dyslexiaPhase.autoHelpCount += 1;
+  }
+
+  recordColorTrialStarted(trialType: ColorPlateType, charType: ColorCharacterType) {
+    this.data.colorPhase.startedTrials += 1;
+
+    if (trialType === "redGreen") {
+      this.data.colorPhase.redGreenTrials += 1;
+    }
+
+    if (trialType === "blueYellow") {
+      this.data.colorPhase.blueYellowTrials += 1;
+    }
+
+    if (trialType === "lowContrast") {
+      this.data.colorPhase.lowContrastTrials += 1;
+    }
+
+    if (charType === "letter") {
+      this.data.colorPhase.letterTrials += 1;
+    } else {
+      this.data.colorPhase.numberTrials += 1;
+    }
+  }
+
+  recordColorTrialCompleted() {
+    this.data.colorPhase.completedTrials += 1;
+  }
+
+  recordColorResponse(record: ColorResponseRecord, isFirstAttempt: boolean) {
+    this.data.colorPhase.attempts += 1;
+    this.data.colorPhase.responseTimes.push(Math.max(0, Math.round(record.responseTimeMs)));
+    this.data.colorPhase.responses.push(cloneColorResponseRecord(record));
+
+    if (record.correct) {
+      this.data.colorPhase.hits += 1;
+    } else {
+      this.data.colorPhase.misses += 1;
+
+      if (isFirstAttempt) {
+        this.data.colorPhase.firstChoiceMisses += 1;
+      }
+    }
+  }
+
+  recordColorAutoHelp() {
+    this.data.colorPhase.autoHelpCount += 1;
   }
 
   finalize() {

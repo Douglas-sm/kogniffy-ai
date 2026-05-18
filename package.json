@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "eslint app src scripts next.config.ts eslint.config.mjs --max-warnings=0",
     "train:model": "node --import tsx scripts/train-model.ts",
-    "train:dyslexia": "node --import tsx scripts/train-dyslexia-model.ts"
+    "train:dyslexia": "node --import tsx scripts/train-dyslexia-model.ts",
+    "generate:colorblind": "node --import tsx scripts/generate-colorblind-resources.ts",
+    "train:colorblind": "node --import tsx scripts/train-colorblind-model.ts"
   },
   "pnpm": {
     "supportedArchitectures": {

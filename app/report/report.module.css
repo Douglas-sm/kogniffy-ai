@@ -140,6 +140,17 @@
   padding-left: 1.2rem;
 }
 
+.evidenceList {
+  color: #426171;
+  margin: 0.8rem 0 1rem;
+  padding-left: 1.2rem;
+}
+
+.evidenceList li {
+  line-height: 1.6;
+  margin: 0.28rem 0;
+}
+
 .recommendations li {
   line-height: 1.6;
   margin: 0.35rem 0;

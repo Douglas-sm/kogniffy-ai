@@ -15,5 +15,13 @@ models/kogniffy/normalization.json
 models/dyslexia/*.bin
 models/dyslexia/model.json
 models/dyslexia/normalization.json
+models/colorblind/*.bin
+models/colorblind/model.json
+models/colorblind/normalization.json
+models/colorblind/metadata.json
+models/colorblind/dataset-metadata.json
+models/colorblind/sessions.csv
+models/colorblind/dataset/**
+models/colorblind/manifests/**
 /.idea
 /data

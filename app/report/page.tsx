@@ -3,8 +3,9 @@
 import type { Chart as ChartInstance } from "chart.js";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { predictColorVisionRisk } from "@/ai/colorblindModel";
 import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
-import { calculateScores, overrideDyslexiaRisk } from "@/ai/scoring";
+import { calculateScores, overrideColorVisionRisk, overrideDyslexiaRisk } from "@/ai/scoring";
 import { loadMetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
 import styles from "./report.module.css";
@@ -62,13 +63,25 @@ export default function ReportPage() {
         ])
       );
 
-      const predictedDyslexiaRisk = await predictDyslexiaRisk(metrics);
+      const [predictedDyslexiaRisk, predictedColorVisionRisk] = await Promise.all([
+        predictDyslexiaRisk(metrics),
+        predictColorVisionRisk(metrics)
+      ]);
 
-      if (!active || predictedDyslexiaRisk === null) {
+      if (!active) {
         return;
       }
 
-      const modelScores = overrideDyslexiaRisk(heuristicScores, predictedDyslexiaRisk);
+      let modelScores = heuristicScores;
+
+      if (predictedDyslexiaRisk !== null) {
+        modelScores = overrideDyslexiaRisk(modelScores, predictedDyslexiaRisk);
+      }
+
+      if (predictedColorVisionRisk !== null) {
+        modelScores = overrideColorVisionRisk(modelScores, predictedColorVisionRisk);
+      }
+
       const report = generateReport(metrics, modelScores);
 
       setState(
@@ -236,6 +249,11 @@ export default function ReportPage() {
                 </span>
               </div>
               <p>{category.summary}</p>
+              <ul className={styles.evidenceList}>
+                {category.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
               <p>{category.recommendation}</p>
             </article>
           ))}

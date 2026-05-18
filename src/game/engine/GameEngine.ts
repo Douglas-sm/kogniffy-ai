@@ -150,6 +150,10 @@ export class GameEngine {
       this.metrics.recordDyslexiaAutoHelp();
     }
 
+    if (sceneId === "colors") {
+      this.metrics.recordColorAutoHelp();
+    }
+
     const phrase = HELP_LINES[(this.metrics.snapshot().autoHelpCount - 1) % HELP_LINES.length];
     this.dialogBox.setLines([phrase, "Não se preocupe, vamos continuar."], () => {
       this.currentScene.onAutoHelp?.(this);

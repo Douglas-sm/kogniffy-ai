@@ -7,6 +7,7 @@ export interface ReportCategory {
   score: RiskScore;
   summary: string;
   recommendation: string;
+  evidence: string[];
 }
 
 export interface KogniffyReport {
@@ -17,12 +18,41 @@ export interface KogniffyReport {
   recommendations: string[];
 }
 
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function variance(values: number[]) {
+  if (values.length < 2) {
+    return 0;
+  }
+
+  const mean = average(values);
+  return values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, values.length - 1);
+}
+
+function rate(numerator: number, denominator: number) {
+  return Math.max(0, numerator) / Math.max(1, denominator);
+}
+
+function percent(value: number) {
+  return `${Math.round(Math.max(0, value) * 100)}%`;
+}
+
 function formatDuration(totalMs: number) {
   const totalSeconds = Math.max(0, Math.round(totalMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
   return `${minutes}min ${seconds.toString().padStart(2, "0")}s`;
+}
+
+function formatShortMs(value: number) {
+  return `${(Math.max(0, value) / 1000).toFixed(1)}s`;
 }
 
 function bandText(band: RiskBand) {
@@ -41,6 +71,124 @@ function categorySummary(label: string, score: RiskScore) {
   return `${label}: pontuação indicativa em nível ${bandText(score.band)}, calculada a partir dos sinais observados durante a experiência.`;
 }
 
+function missRateForColorGroup(metrics: MetricsSnapshot, predicate: (trialType: string) => boolean) {
+  const responses = metrics.colorPhase.responses.filter((response) => predicate(response.trialType));
+
+  if (responses.length === 0) {
+    return 0;
+  }
+
+  return rate(
+    responses.filter((response) => !response.correct).length,
+    responses.length
+  );
+}
+
+function missRateForCharType(metrics: MetricsSnapshot, charType: "digit" | "letter") {
+  const responses = metrics.colorPhase.responses.filter((response) => response.charType === charType);
+
+  if (responses.length === 0) {
+    return 0;
+  }
+
+  return rate(
+    responses.filter((response) => !response.correct).length,
+    responses.length
+  );
+}
+
+function topColorConfusion(metrics: MetricsSnapshot) {
+  const mistakes = metrics.colorPhase.responses.filter((response) => !response.correct);
+  const counts = new Map<string, number>();
+
+  for (const mistake of mistakes) {
+    const key = `${mistake.target}->${mistake.selected}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let best: { key: string; count: number } | null = null;
+
+  for (const [key, count] of counts) {
+    if (!best || count > best.count) {
+      best = { key, count };
+    }
+  }
+
+  return best;
+}
+
+function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
+  const phase = metrics.dyslexiaPhase;
+
+  if (phase.startedWords === 0) {
+    return ["A fase de letras não registrou interações suficientes para detalhar comportamento."];
+  }
+
+  return [
+    `${phase.completedWords} de ${phase.startedWords} palavras foram concluídas durante a fase.`,
+    `${phase.inversionErrors} trocas entre letras parecidas foram registradas nas tentativas.`,
+    `Tempo médio até o primeiro clique: ${formatShortMs(average(phase.firstClickTimes))}.`
+  ];
+}
+
+function buildColorEvidence(metrics: MetricsSnapshot) {
+  const phase = metrics.colorPhase;
+
+  if (phase.startedTrials === 0) {
+    return ["A fase cromática não registrou respostas suficientes para detalhar comportamento."];
+  }
+
+  const groupRates = [
+    { label: "vermelho/verde", value: missRateForColorGroup(metrics, (trialType) => trialType === "redGreen") },
+    { label: "azul/amarelo", value: missRateForColorGroup(metrics, (trialType) => trialType === "blueYellow") },
+    { label: "baixo contraste", value: missRateForColorGroup(metrics, (trialType) => trialType === "lowContrast") }
+  ];
+  const worstGroup = [...groupRates].sort((left, right) => right.value - left.value)[0];
+  const letterMissRate = missRateForCharType(metrics, "letter");
+  const digitMissRate = missRateForCharType(metrics, "digit");
+  const confusion = topColorConfusion(metrics);
+  const evidence = [
+    `${phase.hits} acertos e ${phase.misses} erros em ${phase.attempts} escolhas ao longo de ${phase.completedTrials}/${phase.startedTrials} placas.`,
+    `Tempo médio de resposta na fase: ${formatShortMs(average(phase.responseTimes))}.`,
+    `Maior dificuldade nas placas ${worstGroup.label}, com ${percent(worstGroup.value)} de erro nas escolhas dessa família.`
+  ];
+
+  evidence.push(
+    letterMissRate > digitMissRate
+      ? `As letras geraram mais erro (${percent(letterMissRate)}) do que os números (${percent(digitMissRate)}).`
+      : `Os números geraram erro semelhante ou maior (${percent(digitMissRate)}) do que as letras (${percent(letterMissRate)}).`
+  );
+
+  if (confusion) {
+    const [target, selected] = confusion.key.split("->");
+    evidence.push(`Confusão mais frequente: ${target} foi escolhido como ${selected} em ${confusion.count} resposta(s).`);
+  }
+
+  evidence.push(
+    phase.autoHelpCount > 0
+      ? `A ajuda automática precisou intervir ${phase.autoHelpCount} vez(es) nesta fase.`
+      : "Não houve necessidade de ajuda automática nesta fase."
+  );
+
+  return evidence;
+}
+
+function buildAttentionEvidence(metrics: MetricsSnapshot) {
+  return [
+    `${metrics.impulsiveClicks} cliques impulsivos e ${metrics.missedTargets} alvos perdidos foram registrados.`,
+    `Tempo médio de reação: ${formatShortMs(average(metrics.reactionTimes))}.`,
+    `Variação observada na reação: ${formatShortMs(Math.sqrt(variance(metrics.reactionTimes)))}.`
+  ];
+}
+
+function buildMemoryEvidence(metrics: MetricsSnapshot) {
+  return [
+    `Maior sequência alcançada: ${metrics.maxSequenceLength}.`,
+    `Pontuação de sequência registrada: ${metrics.sequenceScore}.`,
+    `${metrics.sequenceErrors} erro(s) de sequência apareceram durante a fase de memória/reação.`
+  ];
+}
+
 export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores): KogniffyReport {
   const categories: ReportCategory[] = [
     {
@@ -49,7 +197,8 @@ export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores)
       score: scores.dyslexiaRisk,
       summary: categorySummary("Leitura e letras", scores.dyslexiaRisk),
       recommendation:
-        "Observe se trocas entre letras parecidas também aparecem em atividades escolares e procure um profissional especializado se a dúvida persistir."
+        "Observe se trocas entre letras parecidas também aparecem em atividades escolares e procure um profissional especializado se a dúvida persistir.",
+      evidence: buildDyslexiaEvidence(metrics)
     },
     {
       id: "colorVisionRisk",
@@ -57,7 +206,8 @@ export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores)
       score: scores.colorVisionRisk,
       summary: categorySummary("Cores e contraste", scores.colorVisionRisk),
       recommendation:
-        "Compare os sinais observados com situações reais de identificação de cores e considere avaliação especializada quando houver impacto na rotina."
+        "Compare os sinais observados com situações reais de identificação de cores e considere avaliação especializada quando houver impacto na rotina.",
+      evidence: buildColorEvidence(metrics)
     },
     {
       id: "attentionRisk",
@@ -65,7 +215,8 @@ export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores)
       score: scores.attentionRisk,
       summary: categorySummary("Atenção", scores.attentionRisk),
       recommendation:
-        "Registre se respostas impulsivas ou perda de estímulos aparecem em outros contextos, sempre evitando conclusões clínicas sem avaliação."
+        "Registre se respostas impulsivas ou perda de estímulos aparecem em outros contextos, sempre evitando conclusões clínicas sem avaliação.",
+      evidence: buildAttentionEvidence(metrics)
     },
     {
       id: "memoryReactionRisk",
@@ -73,7 +224,8 @@ export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores)
       score: scores.memoryReactionRisk,
       summary: categorySummary("Memória/Reação", scores.memoryReactionRisk),
       recommendation:
-        "Repita atividades lúdicas de sequência e reação em momentos diferentes e procure orientação especializada para interpretar padrões consistentes."
+        "Repita atividades lúdicas de sequência e reação em momentos diferentes e procure orientação especializada para interpretar padrões consistentes.",
+      evidence: buildMemoryEvidence(metrics)
     }
   ];
 

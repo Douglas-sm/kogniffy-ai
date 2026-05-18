@@ -1,5 +1,11 @@
 import type { GameEngine, GameScene, Platform, PointerPosition } from "@/game/engine/GameEngine";
 import {
+  buildIshiharaPlate,
+  generateColorTrials,
+  type ColorTrialSpec,
+  type IshiharaPlate
+} from "@/colorblind/plates";
+import {
   type ButtonRect,
   drawCaveBackground,
   drawChoiceButton,
@@ -7,18 +13,12 @@ import {
   drawPlatform,
   pointInRect
 } from "@/game/scenes/sceneUtils";
-import type { ContrastErrorType } from "@/metrics/metricsCollector";
 
-interface ColorTrial {
-  prompt: string;
-  hidden: string;
-  answer: string;
-  options: string[];
-  type: ContrastErrorType;
-  seed: number;
-  base: string;
-  hiddenColor: string;
+interface SceneTrial extends ColorTrialSpec {
+  plate: IshiharaPlate;
 }
+
+const TRIAL_COUNT = 8;
 
 export class ColorScene implements GameScene {
   id = "colors";
@@ -26,77 +26,83 @@ export class ColorScene implements GameScene {
   objective = "Identifique o código escondido nas cores";
   platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
 
-  private readonly trials: ColorTrial[] = [
-    {
-      prompt: "Existe um número escondido entre os círculos.",
-      hidden: "7",
-      answer: "7",
-      options: ["7", "2", "9"],
-      type: "redGreen",
-      seed: 3,
-      base: "#8bc77a",
-      hiddenColor: "#d67661"
-    },
-    {
-      prompt: "Agora procure o símbolo do caminho.",
-      hidden: "Z",
-      answer: "Z",
-      options: ["N", "Z", "M"],
-      type: "blueYellow",
-      seed: 8,
-      base: "#82b9df",
-      hiddenColor: "#e7cf63"
-    },
-    {
-      prompt: "O último código tem pouco contraste.",
-      hidden: "4",
-      answer: "4",
-      options: ["1", "4", "8"],
-      type: "lowContrast",
-      seed: 12,
-      base: "#b9d7b1",
-      hiddenColor: "#8eb984"
-    }
-  ];
-
+  private trials: SceneTrial[] = [];
   private trialIndex = 0;
+  private trialAttemptCount = 0;
   private startedAt = 0;
+  private waitingForTrialStart = false;
   private completed = false;
 
   enter(engine: GameEngine) {
+    const sessionSeed = Date.now() % 100000;
+
+    this.trials = generateColorTrials(TRIAL_COUNT, sessionSeed).map((trial) => ({
+      ...trial,
+      plate: buildIshiharaPlate(trial)
+    }));
     this.trialIndex = 0;
+    this.trialAttemptCount = 0;
+    this.startedAt = 0;
+    this.waitingForTrialStart = true;
     this.completed = false;
-    this.startedAt = performance.now();
+
     engine.dialogBox.setLines([
-      "Me ajude a decifrar o código para abrir a porta.",
-      "Existe algo escondido entre essas cores.",
-      "Observe os padrões com atenção."
+      "O portão usa placas cromáticas para liberar a passagem.",
+      "Os códigos agora misturam números e letras aleatórias.",
+      "Observe os pontos com calma e escolha entre quatro símbolos."
     ]);
   }
 
-  update() {
-    return;
+  update(engine: GameEngine) {
+    if (this.completed || engine.dialogBox.isActive || !this.waitingForTrialStart) {
+      return;
+    }
+
+    const trial = this.currentTrial();
+
+    if (!trial) {
+      return;
+    }
+
+    this.startedAt = performance.now();
+    this.trialAttemptCount = 0;
+    this.waitingForTrialStart = false;
+    engine.metrics.recordColorTrialStarted(trial.type, trial.charType);
   }
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
-    drawCaveBackground(ctx, engine.timeMs, "#7e65d8");
+    drawCaveBackground(ctx, engine.timeMs, "#6b7bd6");
     for (const platform of this.platforms) {
       drawPlatform(ctx, platform);
     }
 
-    const trial = this.trials[this.trialIndex];
-    drawPanelText(ctx, "Código cromático", trial?.prompt ?? "Portão desbloqueado.");
+    const trial = this.currentTrial();
+    drawPanelText(
+      ctx,
+      "Código cromático",
+      trial?.prompt ?? "Portão desbloqueado. O código foi aceito."
+    );
 
-    if (trial) {
-      this.drawIshihara(ctx, trial);
-      this.optionRects(trial).forEach((rect) => drawChoiceButton(ctx, rect));
+    if (!trial) {
+      return;
     }
+
+    this.drawIshihara(ctx, trial);
+    this.optionRects(trial).forEach((rect) => drawChoiceButton(ctx, rect));
+
+    ctx.fillStyle = "#fff9e9";
+    ctx.font = "800 17px Trebuchet MS, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Escolha o caractere escondido:", 592, 164);
+    ctx.fillStyle = "#d8e8ef";
+    ctx.font = "700 14px Trebuchet MS, sans-serif";
+    ctx.fillText(`Tentativa ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
-    const trial = this.trials[this.trialIndex];
+    const trial = this.currentTrial();
 
-    if (!trial || this.completed) {
+    if (!trial || this.completed || this.waitingForTrialStart) {
       return;
     }
 
@@ -106,17 +112,34 @@ export class ColorScene implements GameScene {
       return;
     }
 
+    const responseTime = performance.now() - this.startedAt;
+    const isFirstAttempt = this.trialAttemptCount === 0;
+    const correct = selected.label === trial.answer;
+
+    this.trialAttemptCount += 1;
+
     engine.metrics.recordAttempt();
-    engine.metrics.recordResponseTime(performance.now() - this.startedAt);
+    engine.metrics.recordResponseTime(responseTime);
+    engine.metrics.recordColorResponse(
+      {
+        target: trial.answer,
+        selected: selected.label,
+        correct,
+        trialType: trial.type,
+        difficulty: trial.difficulty,
+        charType: trial.charType,
+        responseTimeMs: responseTime,
+        optionSet: [...trial.options],
+        trialIndex: this.trialIndex,
+        usedAutoHelp: false
+      },
+      isFirstAttempt
+    );
 
-    if (selected.label === trial.answer) {
+    if (correct) {
       engine.clearErrorStreak(this.id);
-      this.trialIndex += 1;
-      this.startedAt = performance.now();
-
-      if (this.trialIndex >= this.trials.length) {
-        this.complete(engine);
-      }
+      engine.metrics.recordColorTrialCompleted();
+      this.advanceOrComplete(engine);
       return;
     }
 
@@ -125,7 +148,28 @@ export class ColorScene implements GameScene {
   }
 
   onAutoHelp(engine: GameEngine) {
-    this.complete(engine);
+    if (!this.currentTrial() || this.completed) {
+      return;
+    }
+
+    engine.metrics.recordColorTrialCompleted();
+    engine.clearErrorStreak(this.id);
+    this.advanceOrComplete(engine);
+  }
+
+  private currentTrial() {
+    return this.trials[this.trialIndex] ?? null;
+  }
+
+  private advanceOrComplete(engine: GameEngine) {
+    this.trialIndex += 1;
+
+    if (this.trialIndex >= this.trials.length) {
+      this.complete(engine);
+      return;
+    }
+
+    this.waitingForTrialStart = true;
   }
 
   private complete(engine: GameEngine) {
@@ -137,54 +181,58 @@ export class ColorScene implements GameScene {
     engine.dialogBox.setLines(["O portão respondeu ao código. Vamos continuar."], () => engine.nextScene());
   }
 
-  private optionRects(trial: ColorTrial): ButtonRect[] {
+  private optionRects(trial: SceneTrial): ButtonRect[] {
+    const positions = [
+      { x: 592, y: 206 },
+      { x: 706, y: 206 },
+      { x: 592, y: 286 },
+      { x: 706, y: 286 }
+    ];
+
     return trial.options.map((label, index) => ({
       label,
-      x: 602 + index * 104,
-      y: 214,
-      width: 76,
-      height: 60
+      x: positions[index]?.x ?? 592,
+      y: positions[index]?.y ?? 206,
+      width: 90,
+      height: 62
     }));
   }
 
-  private drawIshihara(ctx: CanvasRenderingContext2D, trial: ColorTrial) {
+  private drawIshihara(ctx: CanvasRenderingContext2D, trial: SceneTrial) {
+    const plateRadius = 126;
+    const dotScale = 120;
+
     ctx.save();
     ctx.translate(270, 260);
-    ctx.fillStyle = "#fff9e9";
+    ctx.shadowColor = "rgba(49, 33, 9, 0.16)";
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = "#fffaf0";
     ctx.beginPath();
-    ctx.arc(0, 0, 130, 0, Math.PI * 2);
+    ctx.arc(0, 0, plateRadius + 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(270, 260);
+    ctx.fillStyle = trial.plate.backgroundColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, plateRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.clip();
 
-    for (let index = 0; index < 96; index += 1) {
-      const angle = this.random(index, trial.seed) * Math.PI * 2;
-      const radius = Math.sqrt(this.random(index + 31, trial.seed)) * 120;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      const size = 7 + this.random(index + 7, trial.seed) * 12;
-
-      ctx.fillStyle = index % 4 === 0 ? "#f6c55f" : trial.base;
+    for (const dot of trial.plate.dots) {
+      ctx.fillStyle = dot.color;
       ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.arc(dot.x * dotScale, dot.y * dotScale, dot.radius * dotScale, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    ctx.globalAlpha = 0.82;
-    ctx.fillStyle = trial.hiddenColor;
-    ctx.font = "900 142px Trebuchet MS, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(trial.hidden, 0, 8);
     ctx.restore();
 
-    ctx.strokeStyle = "#173b4f";
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = trial.plate.borderColor;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(270, 260, 130, 0, Math.PI * 2);
+    ctx.arc(270, 260, plateRadius, 0, Math.PI * 2);
     ctx.stroke();
-  }
-
-  private random(index: number, seed: number) {
-    return Math.abs(Math.sin(index * 91.345 + seed * 17.17)) % 1;
   }
 }
