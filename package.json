@@ -13,7 +13,8 @@
     "train:dyslexia": "node --import tsx scripts/train-dyslexia-model.ts",
     "train:adhd": "node --import tsx scripts/train-adhd-model.ts",
     "generate:colorblind": "node --import tsx scripts/generate-colorblind-resources.ts",
-    "train:colorblind": "node --import tsx scripts/train-colorblind-model.ts"
+    "train:colorblind": "node --import tsx scripts/train-colorblind-model.ts",
+    "train:cognitiveperformance": "node --import tsx scripts/train-cognitiveperformance-model.ts"
   },
   "pnpm": {
     "supportedArchitectures": {

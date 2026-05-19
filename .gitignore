@@ -23,5 +23,9 @@ models/colorblind/dataset-metadata.json
 models/colorblind/sessions.csv
 models/colorblind/dataset/**
 models/colorblind/manifests/**
+models/cognitiveperformance/*.bin
+models/cognitiveperformance/model.json
+models/cognitiveperformance/normalization.json
+models/cognitiveperformance/metadata.json
 /.idea
 /data

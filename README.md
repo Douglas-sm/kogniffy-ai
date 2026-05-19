@@ -46,6 +46,7 @@ pnpm lint
 pnpm build
 pnpm train:model ./data/kogniffy-training.csv
 pnpm train:adhd ./data/raw/adhd/adhdata.csv
+pnpm train:cognitiveperformance ./data/raw/cognitiveperformance/human_cognitive_performance.csv
 ```
 
 ## Architecture
@@ -63,6 +64,7 @@ pnpm train:adhd ./data/raw/adhd/adhdata.csv
 - `src/report/generateReport.ts`: report text and category recommendations.
 - `scripts/train-model.ts`: local TensorFlow.js training script.
 - `scripts/train-adhd-model.ts`: local TensorFlow.js training script for the attention proxy model.
+- `scripts/train-cognitiveperformance-model.ts`: local TensorFlow.js training script for the Nave do Kog cognitive performance model.
 - `models/kogniffy`: future model output folder.
 
 ## Gameplay Metrics

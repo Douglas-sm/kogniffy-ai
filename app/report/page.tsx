@@ -5,8 +5,15 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { predictAttentionRisk } from "@/ai/adhdModel";
 import { predictColorVisionRisk } from "@/ai/colorblindModel";
+import { predictCognitivePerformance } from "@/ai/cognitivePerformanceModel";
 import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
-import { calculateScores, overrideAttentionRisk, overrideColorVisionRisk, overrideDyslexiaRisk } from "@/ai/scoring";
+import {
+  calculateScores,
+  overrideAttentionRisk,
+  overrideCognitivePerformanceRisk,
+  overrideColorVisionRisk,
+  overrideDyslexiaRisk
+} from "@/ai/scoring";
 import { loadMetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
 import styles from "./report.module.css";
@@ -32,7 +39,7 @@ function colorForValue(value: number) {
 function buildReportState(report: KogniffyReport, values: number[]): ReportState {
   return {
     report,
-    labels: ["Leitura", "Cores", "Atenção", "Memória"],
+    labels: ["Leitura", "Cores", "Atenção", "Memória", "Cognitivo"],
     values
   };
 }
@@ -62,15 +69,18 @@ export default function ReportPage() {
           heuristicScores.dyslexiaRisk.value,
           heuristicScores.colorVisionRisk.value,
           heuristicScores.attentionRisk.value,
-          heuristicScores.memoryReactionRisk.value
+          heuristicScores.memoryReactionRisk.value,
+          heuristicScores.cognitivePerformanceRisk.value
         ])
       );
 
-      const [predictedDyslexiaRisk, predictedColorVisionRisk, attentionPrediction] = await Promise.all([
-        predictDyslexiaRisk(metrics),
-        predictColorVisionRisk(metrics),
-        predictAttentionRisk(metrics)
-      ]);
+      const [predictedDyslexiaRisk, predictedColorVisionRisk, attentionPrediction, cognitivePerformancePrediction] =
+        await Promise.all([
+          predictDyslexiaRisk(metrics),
+          predictColorVisionRisk(metrics),
+          predictAttentionRisk(metrics),
+          predictCognitivePerformance(metrics)
+        ]);
 
       if (!active) {
         return;
@@ -90,9 +100,14 @@ export default function ReportPage() {
         modelScores = overrideAttentionRisk(modelScores, attentionPrediction.score);
       }
 
+      if (cognitivePerformancePrediction !== null) {
+        modelScores = overrideCognitivePerformanceRisk(modelScores, cognitivePerformancePrediction.riskScore);
+      }
+
       const report = generateReport(metrics, modelScores, {
         attentionPrediction,
-        attentionHeuristicScore: heuristicScores.attentionRisk.value
+        attentionHeuristicScore: heuristicScores.attentionRisk.value,
+        cognitivePerformancePrediction
       });
 
       setState(
@@ -100,7 +115,8 @@ export default function ReportPage() {
           modelScores.dyslexiaRisk.value,
           modelScores.colorVisionRisk.value,
           modelScores.attentionRisk.value,
-          modelScores.memoryReactionRisk.value
+          modelScores.memoryReactionRisk.value,
+          modelScores.cognitivePerformanceRisk.value
         ])
       );
     }

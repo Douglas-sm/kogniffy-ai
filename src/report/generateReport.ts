@@ -1,5 +1,7 @@
 import type { AttentionPrediction } from "@/ai/adhdModel";
 import { ATTENTION_RULE_LABELS } from "@/ai/adhdFeatures";
+import type { CognitivePerformancePrediction } from "@/ai/cognitivePerformanceModel";
+import { buildCognitivePerformanceProxySnapshot } from "@/ai/cognitivePerformanceFeatures";
 import type { KogniffyScores, RiskBand, RiskScore } from "@/ai/scoring";
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
 
@@ -9,7 +11,10 @@ export interface ReportCategoryDetail {
 }
 
 export interface ReportCategory {
-  id: keyof Pick<KogniffyScores, "dyslexiaRisk" | "colorVisionRisk" | "attentionRisk" | "memoryReactionRisk">;
+  id: keyof Pick<
+    KogniffyScores,
+    "dyslexiaRisk" | "colorVisionRisk" | "attentionRisk" | "memoryReactionRisk" | "cognitivePerformanceRisk"
+  >;
   label: string;
   score: RiskScore;
   summary: string;
@@ -29,6 +34,7 @@ export interface KogniffyReport {
 interface GenerateReportOptions {
   attentionPrediction?: AttentionPrediction | null;
   attentionHeuristicScore?: number;
+  cognitivePerformancePrediction?: CognitivePerformancePrediction | null;
 }
 
 function average(values: number[]) {
@@ -410,6 +416,94 @@ function buildMemoryEvidence(metrics: MetricsSnapshot) {
   ];
 }
 
+function buildCognitivePerformanceEvidence(
+  metrics: MetricsSnapshot,
+  prediction: CognitivePerformancePrediction | null | undefined
+) {
+  const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
+  const evidence = [
+    `Tempo médio para iniciar cada rodada do painel: ${formatShortMs(snapshot.primaryResponseTimeMs)}.`,
+    `Tempo médio entre acertos consecutivos: ${formatShortMs(snapshot.interClickTimeMs)}.`,
+    `Maior sequência confirmada: ${formatCount(snapshot.maxSequenceReached)}, com ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`,
+    `Proxies comportamentais usados no score: reação ${formatShortMs(snapshot.reactionTimeProxyMs)} e memória ${Math.round(snapshot.memoryTestProxyScore)}/99.`
+  ];
+
+  if (prediction) {
+    evidence.push(
+      `Pontuação prevista de desempenho cognitivo: ${formatScore(prediction.performanceScore)}. No relatório, isso é refletido como risco indicativo de ${formatScore(prediction.riskScore)}.`
+    );
+  }
+
+  return evidence;
+}
+
+function buildCognitivePerformanceDetails(
+  metrics: MetricsSnapshot,
+  prediction: CognitivePerformancePrediction | null | undefined
+): ReportCategoryDetail[] | undefined {
+  if (!prediction) {
+    return undefined;
+  }
+
+  const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
+  const details: ReportCategoryDetail[] = [
+    {
+      label: "Desempenho estimado",
+      value: formatScore(prediction.performanceScore)
+    },
+    {
+      label: "Risco refletido no relatório",
+      value: formatScore(prediction.riskScore)
+    },
+    {
+      label: "Tempo médio inicial",
+      value: formatShortMs(snapshot.primaryResponseTimeMs)
+    },
+    {
+      label: "Tempo médio entre cliques",
+      value: formatShortMs(snapshot.interClickTimeMs)
+    },
+    {
+      label: "Maior sequência",
+      value: formatCount(snapshot.maxSequenceReached)
+    },
+    {
+      label: "Erros e impulsividade",
+      value: `${formatCount(snapshot.errorCount)} erro(s) | ${formatCount(snapshot.impulsivityCount)} impulso(s)`
+    },
+    {
+      label: "Modo de inferência",
+      value:
+        prediction.source === "model"
+          ? "Modelo treinado a partir da base Human Cognitive Performance Analysis."
+          : "Fallback heurístico linear calibrado com a base Human Cognitive Performance Analysis."
+    }
+  ];
+
+  if (prediction.metadataSummary) {
+    details.push(
+      {
+        label: "Fonte de treino",
+        value: `${prediction.metadataSummary.sourceDataset} | alvo ${prediction.metadataSummary.targetColumn}`
+      },
+      {
+        label: "Base usada",
+        value: `${formatCount(prediction.metadataSummary.rowCount)} linhas | ${formatCount(prediction.metadataSummary.trainRowCount)} treino | ${formatCount(prediction.metadataSummary.validationRowCount)} validação`
+      },
+      {
+        label: "Proxy",
+        value: prediction.metadataSummary.proxyDefinitionVersion
+      },
+      {
+        label: "Treinado em",
+        value: formatDateTime(prediction.metadataSummary.trainedAt)
+      }
+    );
+  }
+
+  return details;
+}
+
 export function generateReport(
   metrics: MetricsSnapshot,
   scores: KogniffyScores,
@@ -452,6 +546,16 @@ export function generateReport(
       recommendation:
         "Repita atividades lúdicas de sequência e reação em momentos diferentes e procure orientação especializada para interpretar padrões consistentes.",
       evidence: buildMemoryEvidence(metrics)
+    },
+    {
+      id: "cognitivePerformanceRisk",
+      label: "Desempenho cognitivo",
+      score: scores.cognitivePerformanceRisk,
+      summary: categorySummary("Desempenho cognitivo", scores.cognitivePerformanceRisk),
+      recommendation:
+        "Observe se velocidade, memória de trabalho e impulsividade se repetem fora do jogo e use este resultado apenas como apoio educativo.",
+      evidence: buildCognitivePerformanceEvidence(metrics, options.cognitivePerformancePrediction),
+      details: buildCognitivePerformanceDetails(metrics, options.cognitivePerformancePrediction)
     }
   ];
 

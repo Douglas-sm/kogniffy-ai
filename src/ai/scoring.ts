@@ -1,4 +1,5 @@
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
+import { calculateCognitivePerformanceFallbackRisk } from "@/ai/cognitivePerformanceFeatures";
 
 export type RiskBand = "baixo" | "intermediario" | "alto";
 
@@ -12,10 +13,17 @@ export interface KogniffyScores {
   colorVisionRisk: RiskScore;
   attentionRisk: RiskScore;
   memoryReactionRisk: RiskScore;
+  cognitivePerformanceRisk: RiskScore;
   overallScore: number;
 }
 
-const SCORE_KEYS = ["dyslexiaRisk", "colorVisionRisk", "attentionRisk", "memoryReactionRisk"] as const;
+const SCORE_KEYS = [
+  "dyslexiaRisk",
+  "colorVisionRisk",
+  "attentionRisk",
+  "memoryReactionRisk",
+  "cognitivePerformanceRisk"
+] as const;
 
 type ScoreKey = (typeof SCORE_KEYS)[number];
 
@@ -116,6 +124,10 @@ export function overrideAttentionRisk(scores: KogniffyScores, value: number): Ko
   return overrideRiskScore(scores, "attentionRisk", value);
 }
 
+export function overrideCognitivePerformanceRisk(scores: KogniffyScores, value: number): KogniffyScores {
+  return overrideRiskScore(scores, "cognitivePerformanceRisk", value);
+}
+
 export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const avgResponse = average(metrics.responseTimes);
   const avgHesitation = average(metrics.hesitationTimes);
@@ -212,11 +224,13 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const colorVisionRisk = createScore(colorVisionValue);
   const attentionRisk = createScore(attentionValue);
   const memoryReactionRisk = createScore(memoryValue);
+  const cognitivePerformanceRisk = createScore(calculateCognitivePerformanceFallbackRisk(metrics));
   const overallScore = calculateOverallScore([
     dyslexiaRisk.value,
     colorVisionRisk.value,
     attentionRisk.value,
-    memoryReactionRisk.value
+    memoryReactionRisk.value,
+    cognitivePerformanceRisk.value
   ]);
 
   return {
@@ -224,6 +238,7 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
     colorVisionRisk,
     attentionRisk,
     memoryReactionRisk,
+    cognitivePerformanceRisk,
     overallScore
   };
 }
