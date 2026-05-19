@@ -285,8 +285,8 @@ function drawButton(
 ) {
   const config = MEMORY_BUTTONS[index]!;
   const borderColor = errorProgress > 0.08 ? "#ff6e78" : config.glow;
-  const fillColor = errorProgress > 0.08 ? "rgba(58, 16, 24, 0.95)" : "rgba(9, 18, 31, 0.96)";
   const glowStrength = clamp(0.18 + intensity * 0.82, 0.18, 1.1);
+  const lightProgress = clamp((intensity - 0.08) / 0.95, 0, 1);
   const pulse = 1 + Math.sin(timeMs / 180 + index * 0.6) * 0.015;
 
   ctx.save();
@@ -301,16 +301,43 @@ function drawButton(
   ctx.fill();
 
   ctx.shadowBlur = 0;
-  ctx.fillStyle = fillColor;
+
+  const bodyGradient = ctx.createLinearGradient(0, -rect.height / 2, 0, rect.height / 2);
+
+  if (errorProgress > 0.08) {
+    bodyGradient.addColorStop(0, "rgba(112, 24, 39, 0.98)");
+    bodyGradient.addColorStop(1, "rgba(58, 16, 24, 0.95)");
+  } else {
+    bodyGradient.addColorStop(0, `rgba(9, 18, 31, ${0.96 - lightProgress * 0.18})`);
+    bodyGradient.addColorStop(1, `rgba(6, 12, 22, ${0.96 - lightProgress * 0.08})`);
+  }
+
+  ctx.fillStyle = bodyGradient;
   ctx.beginPath();
   ctx.roundRect(-rect.width / 2, -rect.height / 2, rect.width, rect.height, 18);
   ctx.fill();
+
+  if (errorProgress <= 0.08) {
+    const lightGradient = ctx.createLinearGradient(0, -rect.height / 2, 0, rect.height / 2);
+    lightGradient.addColorStop(0, hexToRgba(config.color, 0.18 + lightProgress * 0.46));
+    lightGradient.addColorStop(0.58, hexToRgba(config.glow, 0.08 + lightProgress * 0.28));
+    lightGradient.addColorStop(1, hexToRgba(config.color, 0.04 + lightProgress * 0.14));
+    ctx.fillStyle = lightGradient;
+    ctx.beginPath();
+    ctx.roundRect(-rect.width / 2 + 4, -rect.height / 2 + 4, rect.width - 8, rect.height - 8, 15);
+    ctx.fill();
+
+    ctx.fillStyle = hexToRgba("#ffffff", 0.05 + lightProgress * 0.18);
+    ctx.beginPath();
+    ctx.roundRect(-rect.width / 2 + 10, -rect.height / 2 + 8, rect.width - 20, 16, 8);
+    ctx.fill();
+  }
 
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = borderColor;
   ctx.stroke();
 
-  ctx.fillStyle = errorProgress > 0.08 ? "#ffd7db" : config.color;
+  ctx.fillStyle = errorProgress > 0.08 ? "#ffd7db" : lightProgress > 0.4 ? "#f8fdff" : config.color;
   ctx.font = "900 26px Trebuchet MS, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
