@@ -3,9 +3,10 @@
 import type { Chart as ChartInstance } from "chart.js";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { predictAttentionRisk } from "@/ai/adhdModel";
 import { predictColorVisionRisk } from "@/ai/colorblindModel";
 import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
-import { calculateScores, overrideColorVisionRisk, overrideDyslexiaRisk } from "@/ai/scoring";
+import { calculateScores, overrideAttentionRisk, overrideColorVisionRisk, overrideDyslexiaRisk } from "@/ai/scoring";
 import { loadMetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
 import styles from "./report.module.css";
@@ -52,7 +53,9 @@ export default function ReportPage() {
       }
 
       const heuristicScores = calculateScores(metrics);
-      const heuristicReport = generateReport(metrics, heuristicScores);
+      const heuristicReport = generateReport(metrics, heuristicScores, {
+        attentionHeuristicScore: heuristicScores.attentionRisk.value
+      });
 
       setState(
         buildReportState(heuristicReport, [
@@ -63,9 +66,10 @@ export default function ReportPage() {
         ])
       );
 
-      const [predictedDyslexiaRisk, predictedColorVisionRisk] = await Promise.all([
+      const [predictedDyslexiaRisk, predictedColorVisionRisk, attentionPrediction] = await Promise.all([
         predictDyslexiaRisk(metrics),
-        predictColorVisionRisk(metrics)
+        predictColorVisionRisk(metrics),
+        predictAttentionRisk(metrics)
       ]);
 
       if (!active) {
@@ -82,7 +86,14 @@ export default function ReportPage() {
         modelScores = overrideColorVisionRisk(modelScores, predictedColorVisionRisk);
       }
 
-      const report = generateReport(metrics, modelScores);
+      if (attentionPrediction !== null) {
+        modelScores = overrideAttentionRisk(modelScores, attentionPrediction.score);
+      }
+
+      const report = generateReport(metrics, modelScores, {
+        attentionPrediction,
+        attentionHeuristicScore: heuristicScores.attentionRisk.value
+      });
 
       setState(
         buildReportState(report, [
@@ -254,6 +265,16 @@ export default function ReportPage() {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+              {category.details && category.details.length > 0 ? (
+                <dl className={styles.detailList}>
+                  {category.details.map((detail) => (
+                    <div className={styles.detailRow} key={`${category.id}-${detail.label}`}>
+                      <dt>{detail.label}</dt>
+                      <dd>{detail.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
               <p>{category.recommendation}</p>
             </article>
           ))}

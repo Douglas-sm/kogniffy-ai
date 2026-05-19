@@ -45,6 +45,7 @@ Other commands:
 pnpm lint
 pnpm build
 pnpm train:model ./data/kogniffy-training.csv
+pnpm train:adhd ./data/raw/adhd/adhdata.csv
 ```
 
 ## Architecture
@@ -61,6 +62,7 @@ pnpm train:model ./data/kogniffy-training.csv
 - `src/ai/modelLoader.ts`: future TensorFlow.js browser model loader with heuristic fallback.
 - `src/report/generateReport.ts`: report text and category recommendations.
 - `scripts/train-model.ts`: local TensorFlow.js training script.
+- `scripts/train-adhd-model.ts`: local TensorFlow.js training script for the attention proxy model.
 - `models/kogniffy`: future model output folder.
 
 ## Gameplay Metrics

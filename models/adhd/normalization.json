@@ -1,0 +1,50 @@
+{
+  "features": [
+    "sustainedAttentionPenalty",
+    "impulsivityPenalty",
+    "distractibilityPenalty",
+    "adaptationPenalty"
+  ],
+  "normalization": [
+    {
+      "feature": "sustainedAttentionPenalty",
+      "mean": 0.4932180514983133,
+      "std": 0.149695312861438
+    },
+    {
+      "feature": "impulsivityPenalty",
+      "mean": 0.4846410420003294,
+      "std": 0.1460262794773919
+    },
+    {
+      "feature": "distractibilityPenalty",
+      "mean": 0.4877916449348152,
+      "std": 0.15898877218127214
+    },
+    {
+      "feature": "adaptationPenalty",
+      "mean": 0.48864722594261134,
+      "std": 0.16179004832658567
+    }
+  ],
+  "sourceDataset": "EEG Dataset for ADHD",
+  "inferenceMode": "behavioral-proxy-calibrated-by-eeg",
+  "modelType": "logistic-regression-proxy",
+  "windowSize": 1024,
+  "rawRowCount": 2166383,
+  "rowCount": 2057,
+  "windowCount": 2057,
+  "subjectCount": 121,
+  "validationSubjectCount": 24,
+  "classDistribution": {
+    "control": 60,
+    "adhd": 61
+  },
+  "trainingMetrics": {
+    "loss": 0.622246503829956,
+    "accuracy": 0.6585809588432312,
+    "valLoss": 0.6451573371887207,
+    "valAccuracy": 0.6642156839370728
+  },
+  "trainedAt": "2026-05-19T01:44:39.730Z"
+}

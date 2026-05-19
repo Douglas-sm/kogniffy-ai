@@ -151,6 +151,32 @@
   margin: 0.28rem 0;
 }
 
+.detailList {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+}
+
+.detailRow {
+  background: #eef7f2;
+  border-radius: 0.65rem;
+  padding: 0.8rem 0.9rem;
+}
+
+.detailRow dt {
+  color: #173b4f;
+  font-size: 0.85rem;
+  font-weight: 800;
+  margin: 0 0 0.22rem;
+  text-transform: uppercase;
+}
+
+.detailRow dd {
+  color: #426171;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .recommendations li {
   line-height: 1.6;
   margin: 0.35rem 0;

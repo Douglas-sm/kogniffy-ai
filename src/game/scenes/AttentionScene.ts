@@ -1,3 +1,4 @@
+import { predictAttentionRisk, warmAttentionModel } from "@/ai/adhdModel";
 import type { GameEngine, GameScene, Platform } from "@/game/engine/GameEngine";
 import type { AttentionRuleId } from "@/metrics/metricsCollector";
 import {
@@ -55,6 +56,8 @@ const ACTIVE_DURATION_MS = 30_000;
 const RULE_DURATION_MS = 7_500;
 const RULE_BANNER_MS = 1_200;
 const ASSIST_DURATION_MS = 6_000;
+const RISK_SAMPLE_INTERVAL_MS = 1_500;
+const MIN_TARGETS_FOR_RISK_SAMPLE = 3;
 const MAX_SIMULTANEOUS_OBJECTS = 3;
 const FLOOR_Y = 432;
 const RULES: AttentionRule[] = [
@@ -107,6 +110,8 @@ export class AttentionScene implements GameScene {
   private impulsiveErrors = 0;
   private omissions = 0;
   private distractionsCollected = 0;
+  private lastRiskSampleAtMs = -RISK_SAMPLE_INTERVAL_MS;
+  private riskPredictionPending = false;
 
   enter(engine: GameEngine) {
     this.fallingObjects = [];
@@ -122,6 +127,9 @@ export class AttentionScene implements GameScene {
     this.impulsiveErrors = 0;
     this.omissions = 0;
     this.distractionsCollected = 0;
+    this.lastRiskSampleAtMs = -RISK_SAMPLE_INTERVAL_MS;
+    this.riskPredictionPending = false;
+    void warmAttentionModel();
     engine.metrics.startAttentionRule(this.currentRule.id, this.currentRule.label, 0);
     engine.dialogBox.setLines([
       "A caverna começou a tremer e tudo está caindo do teto.",
@@ -182,6 +190,7 @@ export class AttentionScene implements GameScene {
     }
 
     this.updateFallingObjects(engine, dt);
+    this.scheduleRiskSample(engine);
   }
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
@@ -326,6 +335,48 @@ export class AttentionScene implements GameScene {
     }
 
     engine.registerError(this.id);
+  }
+
+  private scheduleRiskSample(engine: GameEngine) {
+    if (this.riskPredictionPending || this.phase !== "playing") {
+      return;
+    }
+
+    if (this.activeElapsedMs - this.lastRiskSampleAtMs < RISK_SAMPLE_INTERVAL_MS) {
+      return;
+    }
+
+    const snapshot = engine.metrics.snapshot();
+
+    if (snapshot.attentionPhase.targetSpawns < MIN_TARGETS_FOR_RISK_SAMPLE) {
+      return;
+    }
+
+    const sampledAtMs = Math.round(this.activeElapsedMs);
+    const ruleId = this.currentRule.id;
+
+    this.lastRiskSampleAtMs = sampledAtMs;
+    this.riskPredictionPending = true;
+
+    void predictAttentionRisk(snapshot)
+      .then((prediction) => {
+        if (!prediction) {
+          return;
+        }
+
+        engine.metrics.recordAttentionLiveRiskSample({
+          atMs: sampledAtMs,
+          ruleId,
+          score: prediction.score,
+          sustainedAttentionPenalty: prediction.featureVector.sustainedAttentionPenalty,
+          impulsivityPenalty: prediction.featureVector.impulsivityPenalty,
+          distractibilityPenalty: prediction.featureVector.distractibilityPenalty,
+          adaptationPenalty: prediction.featureVector.adaptationPenalty
+        });
+      })
+      .finally(() => {
+        this.riskPredictionPending = false;
+      });
   }
 
   private currentRuleMatches(crystal: Pick<CrystalObject, "color" | "size" | "bright">) {

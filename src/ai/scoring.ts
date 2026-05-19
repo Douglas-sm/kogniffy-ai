@@ -112,6 +112,10 @@ export function overrideColorVisionRisk(scores: KogniffyScores, value: number): 
   return overrideRiskScore(scores, "colorVisionRisk", value);
 }
 
+export function overrideAttentionRisk(scores: KogniffyScores, value: number): KogniffyScores {
+  return overrideRiskScore(scores, "attentionRisk", value);
+}
+
 export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const avgResponse = average(metrics.responseTimes);
   const avgHesitation = average(metrics.hesitationTimes);

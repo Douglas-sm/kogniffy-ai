@@ -1,4 +1,12 @@
 import type { ColorCharacterType, ColorDifficulty, ColorPlateType } from "@/colorblind/plates";
+import {
+  COGNITIVE_METRICS_SESSION_KEY,
+  type CognitiveMetrics,
+  averageSpeedFromInterClickTimes,
+  cloneCognitiveMetrics,
+  createEmptyCognitiveMetrics,
+  normalizeCognitiveMetrics
+} from "@/metrics/cognitiveMetrics";
 
 export const METRICS_SESSION_KEY = "kogniffy.metrics.v1";
 
@@ -84,6 +92,16 @@ export interface AttentionSegmentSummary {
   reactionTimes: number[];
 }
 
+export interface AttentionLiveRiskSample {
+  atMs: number;
+  ruleId: AttentionRuleId;
+  score: number;
+  sustainedAttentionPenalty: number;
+  impulsivityPenalty: number;
+  distractibilityPenalty: number;
+  adaptationPenalty: number;
+}
+
 export interface AttentionPhaseSnapshot {
   targetSpawns: number;
   distractionSpawns: number;
@@ -97,6 +115,7 @@ export interface AttentionPhaseSnapshot {
   autoHelpCount: number;
   ruleSummaries: AttentionRuleSummary[];
   segmentSummaries: AttentionSegmentSummary[];
+  liveRiskSamples: AttentionLiveRiskSample[];
 }
 
 export interface MetricsSnapshot {
@@ -122,6 +141,7 @@ export interface MetricsSnapshot {
   reactionTimes: number[];
   sequenceErrors: number;
   maxSequenceLength: number;
+  cognitiveMetrics: CognitiveMetrics;
   dyslexiaPhase: DyslexiaPhaseSnapshot;
   colorPhase: ColorPhaseSnapshot;
   attentionPhase: AttentionPhaseSnapshot;
@@ -197,7 +217,8 @@ function createEmptyAttentionPhase(): AttentionPhaseSnapshot {
     reactionTimes: [],
     autoHelpCount: 0,
     ruleSummaries: [],
-    segmentSummaries: ATTENTION_SEGMENT_DEFINITIONS.map(createEmptyAttentionSegment)
+    segmentSummaries: ATTENTION_SEGMENT_DEFINITIONS.map(createEmptyAttentionSegment),
+    liveRiskSamples: []
   };
 }
 
@@ -243,8 +264,13 @@ function cloneAttentionPhase(snapshot: AttentionPhaseSnapshot): AttentionPhaseSn
     ...snapshot,
     reactionTimes: [...snapshot.reactionTimes],
     ruleSummaries: snapshot.ruleSummaries.map(cloneAttentionRuleSummary),
-    segmentSummaries: snapshot.segmentSummaries.map(cloneAttentionSegmentSummary)
+    segmentSummaries: snapshot.segmentSummaries.map(cloneAttentionSegmentSummary),
+    liveRiskSamples: snapshot.liveRiskSamples.map((sample) => ({ ...sample }))
   };
+}
+
+function cloneCognitiveMetricsSnapshot(snapshot: CognitiveMetrics): CognitiveMetrics {
+  return cloneCognitiveMetrics(snapshot);
 }
 
 function toNonNegativeInteger(value: unknown, fallback = 0) {
@@ -309,6 +335,14 @@ function toAttentionSegmentId(value: unknown, fallback: AttentionSegmentId): Att
   }
 
   return fallback;
+}
+
+function roundUnitMetric(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, Math.round(value * 10_000) / 10_000));
 }
 
 function toDyslexiaPhaseSnapshot(value: unknown): DyslexiaPhaseSnapshot {
@@ -436,6 +470,26 @@ function toAttentionSegmentSummary(value: unknown, index: number): AttentionSegm
   };
 }
 
+function toAttentionLiveRiskSample(value: unknown): AttentionLiveRiskSample | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const sample = value as Partial<AttentionLiveRiskSample>;
+
+  return {
+    atMs: toNonNegativeInteger(sample.atMs),
+    ruleId: toAttentionRuleId(sample.ruleId),
+    score: toNonNegativeInteger(sample.score),
+    sustainedAttentionPenalty:
+      typeof sample.sustainedAttentionPenalty === "number" ? roundUnitMetric(sample.sustainedAttentionPenalty) : 0,
+    impulsivityPenalty: typeof sample.impulsivityPenalty === "number" ? roundUnitMetric(sample.impulsivityPenalty) : 0,
+    distractibilityPenalty:
+      typeof sample.distractibilityPenalty === "number" ? roundUnitMetric(sample.distractibilityPenalty) : 0,
+    adaptationPenalty: typeof sample.adaptationPenalty === "number" ? roundUnitMetric(sample.adaptationPenalty) : 0
+  };
+}
+
 function toAttentionPhaseSnapshot(value: unknown): AttentionPhaseSnapshot {
   if (typeof value !== "object" || value === null) {
     return createEmptyAttentionPhase();
@@ -444,6 +498,7 @@ function toAttentionPhaseSnapshot(value: unknown): AttentionPhaseSnapshot {
   const phase = value as Partial<AttentionPhaseSnapshot>;
   const rawRuleSummaries = Array.isArray(phase.ruleSummaries) ? phase.ruleSummaries : [];
   const rawSegmentSummaries = Array.isArray(phase.segmentSummaries) ? phase.segmentSummaries : [];
+  const rawLiveRiskSamples = Array.isArray(phase.liveRiskSamples) ? phase.liveRiskSamples : [];
 
   return {
     targetSpawns: toNonNegativeInteger(phase.targetSpawns),
@@ -461,7 +516,11 @@ function toAttentionPhaseSnapshot(value: unknown): AttentionPhaseSnapshot {
       .filter((summary): summary is AttentionRuleSummary => summary !== null),
     segmentSummaries: ATTENTION_SEGMENT_DEFINITIONS.map((_, index) =>
       toAttentionSegmentSummary(rawSegmentSummaries[index], index)
-    )
+    ),
+    liveRiskSamples: rawLiveRiskSamples
+      .map((sample) => toAttentionLiveRiskSample(sample))
+      .filter((sample): sample is AttentionLiveRiskSample => sample !== null)
+      .sort((left, right) => left.atMs - right.atMs)
   };
 }
 
@@ -495,6 +554,7 @@ function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
     reactionTimes: toNumberArray(snapshot.reactionTimes),
     sequenceErrors: toNonNegativeInteger(snapshot.sequenceErrors),
     maxSequenceLength: toNonNegativeInteger(snapshot.maxSequenceLength),
+    cognitiveMetrics: normalizeCognitiveMetrics(snapshot.cognitiveMetrics),
     dyslexiaPhase: toDyslexiaPhaseSnapshot(snapshot.dyslexiaPhase),
     colorPhase: toColorPhaseSnapshot(snapshot.colorPhase),
     attentionPhase: toAttentionPhaseSnapshot(snapshot.attentionPhase)
@@ -525,6 +585,7 @@ function createEmptySnapshot(): MetricsSnapshot {
     reactionTimes: [],
     sequenceErrors: 0,
     maxSequenceLength: 0,
+    cognitiveMetrics: createEmptyCognitiveMetrics(),
     dyslexiaPhase: createEmptyDyslexiaPhase(),
     colorPhase: createEmptyColorPhase(),
     attentionPhase: createEmptyAttentionPhase()
@@ -539,6 +600,7 @@ function cloneSnapshot(snapshot: MetricsSnapshot): MetricsSnapshot {
     autoHelps: snapshot.autoHelps.map((record) => ({ ...record })),
     firstClickTimes: [...snapshot.firstClickTimes],
     reactionTimes: [...snapshot.reactionTimes],
+    cognitiveMetrics: cloneCognitiveMetricsSnapshot(snapshot.cognitiveMetrics),
     dyslexiaPhase: cloneDyslexiaPhase(snapshot.dyslexiaPhase),
     colorPhase: cloneColorPhase(snapshot.colorPhase),
     attentionPhase: cloneAttentionPhase(snapshot.attentionPhase)
@@ -554,6 +616,7 @@ export class MetricsCollector {
 
   reset() {
     this.data = createEmptySnapshot();
+    syncCognitiveMetricsState(this.data.cognitiveMetrics);
   }
 
   get elapsedMs() {
@@ -634,6 +697,37 @@ export class MetricsCollector {
 
   recordMaxSequenceLength(length: number) {
     this.data.maxSequenceLength = Math.max(this.data.maxSequenceLength, roundMetric(length));
+  }
+
+  recordCognitiveResponseTime(ms: number) {
+    this.data.cognitiveMetrics.responseTimesMs.push(roundMetric(ms));
+    this.syncCognitiveMetrics();
+  }
+
+  recordCognitiveInterClickTime(ms: number) {
+    this.data.cognitiveMetrics.interClickTimesMs.push(roundMetric(ms));
+    this.data.cognitiveMetrics.averageSpeedMs = averageSpeedFromInterClickTimes(
+      this.data.cognitiveMetrics.interClickTimesMs
+    );
+    this.syncCognitiveMetrics();
+  }
+
+  recordCognitiveError() {
+    this.data.cognitiveMetrics.errorCount += 1;
+    this.syncCognitiveMetrics();
+  }
+
+  recordCognitiveMaxSequence(length: number) {
+    this.data.cognitiveMetrics.maxSequenceReached = Math.max(
+      this.data.cognitiveMetrics.maxSequenceReached,
+      roundMetric(length)
+    );
+    this.syncCognitiveMetrics();
+  }
+
+  recordCognitiveImpulsiveClick() {
+    this.data.cognitiveMetrics.impulsivityCount += 1;
+    this.syncCognitiveMetrics();
   }
 
   recordDyslexiaWordStarted() {
@@ -859,6 +953,27 @@ export class MetricsCollector {
     this.data.attentionPhase.autoHelpCount += 1;
   }
 
+  recordAttentionLiveRiskSample(sample: AttentionLiveRiskSample) {
+    const normalizedSample: AttentionLiveRiskSample = {
+      atMs: roundMetric(sample.atMs),
+      ruleId: toAttentionRuleId(sample.ruleId),
+      score: roundMetric(sample.score),
+      sustainedAttentionPenalty: roundUnitMetric(sample.sustainedAttentionPenalty),
+      impulsivityPenalty: roundUnitMetric(sample.impulsivityPenalty),
+      distractibilityPenalty: roundUnitMetric(sample.distractibilityPenalty),
+      adaptationPenalty: roundUnitMetric(sample.adaptationPenalty)
+    };
+    const samples = this.data.attentionPhase.liveRiskSamples;
+    const existingIndex = samples.findIndex((item) => item.atMs === normalizedSample.atMs);
+
+    if (existingIndex >= 0) {
+      samples[existingIndex] = normalizedSample;
+    } else {
+      samples.push(normalizedSample);
+      samples.sort((left, right) => left.atMs - right.atMs);
+    }
+  }
+
   finalize() {
     this.data.completedAt = Date.now();
     this.data.totalTimeMs = this.data.completedAt - this.data.startedAt;
@@ -871,6 +986,10 @@ export class MetricsCollector {
       ? this.data.totalTimeMs
       : Date.now() - this.data.startedAt;
     return snapshot;
+  }
+
+  private syncCognitiveMetrics() {
+    syncCognitiveMetricsState(this.data.cognitiveMetrics);
   }
 
   private currentAttentionRule() {
@@ -906,6 +1025,7 @@ export function saveMetricsSnapshot(snapshot: MetricsSnapshot) {
   }
 
   window.sessionStorage.setItem(METRICS_SESSION_KEY, JSON.stringify(snapshot));
+  syncCognitiveMetricsState(snapshot.cognitiveMetrics);
 }
 
 export function loadMetricsSnapshot(): MetricsSnapshot | null {
@@ -920,9 +1040,48 @@ export function loadMetricsSnapshot(): MetricsSnapshot | null {
   }
 
   try {
-    return toMetricsSnapshot(JSON.parse(raw));
+    const snapshot = toMetricsSnapshot(JSON.parse(raw));
+
+    if (snapshot) {
+      syncCognitiveMetricsState(snapshot.cognitiveMetrics);
+    }
+
+    return snapshot;
   } catch {
     window.sessionStorage.removeItem(METRICS_SESSION_KEY);
     return null;
   }
+}
+
+export function loadCognitiveMetrics(): CognitiveMetrics {
+  if (typeof window === "undefined") {
+    return createEmptyCognitiveMetrics();
+  }
+
+  const raw = window.sessionStorage.getItem(COGNITIVE_METRICS_SESSION_KEY);
+
+  if (!raw) {
+    return window.cognitiveMetrics ? cloneCognitiveMetrics(window.cognitiveMetrics) : createEmptyCognitiveMetrics();
+  }
+
+  try {
+    const metrics = normalizeCognitiveMetrics(JSON.parse(raw));
+    syncCognitiveMetricsState(metrics);
+    return metrics;
+  } catch {
+    window.sessionStorage.removeItem(COGNITIVE_METRICS_SESSION_KEY);
+    const fallback = createEmptyCognitiveMetrics();
+    syncCognitiveMetricsState(fallback);
+    return fallback;
+  }
+}
+
+function syncCognitiveMetricsState(metrics: CognitiveMetrics) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedMetrics = normalizeCognitiveMetrics(metrics);
+  window.cognitiveMetrics = cloneCognitiveMetrics(normalizedMetrics);
+  window.sessionStorage.setItem(COGNITIVE_METRICS_SESSION_KEY, JSON.stringify(normalizedMetrics));
 }

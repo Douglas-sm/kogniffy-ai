@@ -1,5 +1,12 @@
+import type { AttentionPrediction } from "@/ai/adhdModel";
+import { ATTENTION_RULE_LABELS } from "@/ai/adhdFeatures";
 import type { KogniffyScores, RiskBand, RiskScore } from "@/ai/scoring";
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
+
+export interface ReportCategoryDetail {
+  label: string;
+  value: string;
+}
 
 export interface ReportCategory {
   id: keyof Pick<KogniffyScores, "dyslexiaRisk" | "colorVisionRisk" | "attentionRisk" | "memoryReactionRisk">;
@@ -8,6 +15,7 @@ export interface ReportCategory {
   summary: string;
   recommendation: string;
   evidence: string[];
+  details?: ReportCategoryDetail[];
 }
 
 export interface KogniffyReport {
@@ -16,6 +24,11 @@ export interface KogniffyReport {
   summary: string;
   categories: ReportCategory[];
   recommendations: string[];
+}
+
+interface GenerateReportOptions {
+  attentionPrediction?: AttentionPrediction | null;
+  attentionHeuristicScore?: number;
 }
 
 function average(values: number[]) {
@@ -43,6 +56,14 @@ function percent(value: number) {
   return `${Math.round(Math.max(0, value) * 100)}%`;
 }
 
+function formatScore(value: number) {
+  return `${Math.max(0, Math.round(value))}/100`;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("pt-BR").format(Math.max(0, Math.round(value)));
+}
+
 function formatDuration(totalMs: number) {
   const totalSeconds = Math.max(0, Math.round(totalMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -53,6 +74,21 @@ function formatDuration(totalMs: number) {
 
 function formatShortMs(value: number) {
   return `${(Math.max(0, value) / 1000).toFixed(1)}s`;
+}
+
+function formatDateTime(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("pt-BR");
+}
+
+function formatSigned(value: number) {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
 function bandText(band: RiskBand) {
@@ -121,6 +157,71 @@ function hasAttentionPhase(metrics: MetricsSnapshot) {
   return metrics.attentionPhase.targetSpawns > 0 || metrics.attentionPhase.ruleSummaries.length > 0;
 }
 
+function summarizeLiveAttentionSamples(metrics: MetricsSnapshot) {
+  const samples = metrics.attentionPhase.liveRiskSamples;
+
+  if (samples.length === 0) {
+    return null;
+  }
+
+  const scores = samples.map((sample) => sample.score);
+
+  return {
+    count: samples.length,
+    average: average(scores),
+    min: Math.min(...scores),
+    max: Math.max(...scores)
+  };
+}
+
+function mostCriticalAttentionRule(metrics: MetricsSnapshot) {
+  const samples = metrics.attentionPhase.liveRiskSamples;
+
+  if (samples.length === 0) {
+    return null;
+  }
+
+  const byRule = new Map<string, { total: number; count: number }>();
+
+  for (const sample of samples) {
+    const bucket = byRule.get(sample.ruleId) ?? { total: 0, count: 0 };
+    bucket.total += sample.score;
+    bucket.count += 1;
+    byRule.set(sample.ruleId, bucket);
+  }
+
+  let best: { ruleId: keyof typeof ATTENTION_RULE_LABELS; average: number } | null = null;
+
+  for (const [ruleId, bucket] of byRule) {
+    const ruleAverage = bucket.total / Math.max(1, bucket.count);
+
+    if (!best || ruleAverage > best.average) {
+      best = {
+        ruleId: ruleId as keyof typeof ATTENTION_RULE_LABELS,
+        average: ruleAverage
+      };
+    }
+  }
+
+  return best
+    ? {
+        ...best,
+        label: ATTENTION_RULE_LABELS[best.ruleId]
+      }
+    : null;
+}
+
+function topAttentionSignals(prediction: AttentionPrediction | null | undefined) {
+  if (!prediction) {
+    return [];
+  }
+
+  const positiveContributions = prediction.contributions.filter((item) => item.contribution > 0);
+  const source = positiveContributions.length > 0 ? positiveContributions : prediction.contributions;
+
+  return source.slice(0, 3);
+}
+
 function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
   const phase = metrics.dyslexiaPhase;
 
@@ -177,7 +278,7 @@ function buildColorEvidence(metrics: MetricsSnapshot) {
   return evidence;
 }
 
-function buildAttentionEvidence(metrics: MetricsSnapshot) {
+function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateReportOptions) {
   if (!hasAttentionPhase(metrics)) {
     return [
       `${metrics.impulsiveClicks} cliques impulsivos e ${metrics.missedTargets} alvos perdidos foram registrados.`,
@@ -196,14 +297,109 @@ function buildAttentionEvidence(metrics: MetricsSnapshot) {
   const postSwitchErrorRate = average(
     phase.ruleSummaries.map((summary) => rate(summary.postSwitchErrors, summary.postSwitchErrors + summary.postSwitchHits))
   );
-
-  return [
+  const evidence = [
     `${phase.correctHits} acertos em ${phase.targetSpawns} cristais corretos gerados, com ${phase.omissions} omissões e ${phase.distractionsCollected} distrações coletadas.`,
     `${phase.impulsiveErrors} erro(s) por impulsividade foram registrados, sendo ${phase.wrongCrystalHits} em cristais errados.`,
     `Tempo médio de reação aos cristais corretos: ${formatShortMs(average(phase.reactionTimes))}, com variação de ${formatShortMs(Math.sqrt(variance(phase.reactionTimes)))}.`,
     `Após cada mudança de regra, o primeiro acerto levou em média ${formatShortMs(average(switchLatencies))} e a taxa média de erro nos 5s iniciais foi ${percent(postSwitchErrorRate)}.`,
     `Consistência da fase: início ${percent(rate(startSegment?.hits ?? 0, startSegment?.targetSpawns ?? 0))}, meio ${percent(rate(middleSegment?.hits ?? 0, middleSegment?.targetSpawns ?? 0))} e fim ${percent(rate(endSegment?.hits ?? 0, endSegment?.targetSpawns ?? 0))} de acerto sobre os alvos gerados.`
   ];
+
+  if (options.attentionPrediction) {
+    evidence.push(
+      `Pontuação heurística final: ${formatScore(options.attentionHeuristicScore ?? 0)}. Pontuação do modelo ADHD proxy calibrado por EEG: ${formatScore(options.attentionPrediction.score)}.`
+    );
+  }
+
+  const liveSummary = summarizeLiveAttentionSamples(metrics);
+
+  if (liveSummary) {
+    evidence.push(
+      `Durante a fase, ${liveSummary.count} amostras locais foram analisadas em tempo real, com média ${formatScore(liveSummary.average)} e faixa entre ${formatScore(liveSummary.min)} e ${formatScore(liveSummary.max)}.`
+    );
+  }
+
+  const criticalRule = mostCriticalAttentionRule(metrics);
+
+  if (criticalRule) {
+    evidence.push(`Regra mais sensível nas amostras ao vivo: ${criticalRule.label}, com média ${formatScore(criticalRule.average)}.`);
+  }
+
+  const topSignals = topAttentionSignals(options.attentionPrediction);
+
+  if (topSignals.length > 0) {
+    evidence.push(
+      `Sinais que mais elevaram a leitura do modelo: ${topSignals
+        .map((signal) => `${signal.label} (${formatSigned(signal.contribution)})`)
+        .join(", ")}.`
+    );
+  }
+
+  return evidence;
+}
+
+function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  if (!options.attentionPrediction) {
+    return undefined;
+  }
+
+  const details: ReportCategoryDetail[] = [
+    {
+      label: "Pontuação heurística",
+      value: formatScore(options.attentionHeuristicScore ?? 0)
+    },
+    {
+      label: "Pontuação do modelo ADHD",
+      value: formatScore(options.attentionPrediction.score)
+    }
+  ];
+  const liveSummary = summarizeLiveAttentionSamples(metrics);
+
+  if (liveSummary) {
+    details.push({
+      label: "Amostras ao vivo",
+      value: `${liveSummary.count} registros | média ${formatScore(liveSummary.average)} | faixa ${formatScore(liveSummary.min)} a ${formatScore(liveSummary.max)}`
+    });
+  }
+
+  const criticalRule = mostCriticalAttentionRule(metrics);
+
+  if (criticalRule) {
+    details.push({
+      label: "Regra mais crítica",
+      value: `${criticalRule.label} (média ${formatScore(criticalRule.average)})`
+    });
+  }
+
+  const topSignals = topAttentionSignals(options.attentionPrediction);
+
+  if (topSignals.length > 0) {
+    details.push({
+      label: "Top sinais",
+      value: topSignals.map((signal) => `${signal.label} (${formatSigned(signal.contribution)})`).join(", ")
+    });
+  }
+
+  details.push(
+    {
+      label: "Fonte de treino",
+      value: `${options.attentionPrediction.metadataSummary.sourceDataset} | ${formatCount(options.attentionPrediction.metadataSummary.rawRowCount)} linhas | ${formatCount(options.attentionPrediction.metadataSummary.windowCount)} janelas | ${formatCount(options.attentionPrediction.metadataSummary.subjectCount)} sujeitos`
+    },
+    {
+      label: "Distribuição da base",
+      value: `${formatCount(options.attentionPrediction.metadataSummary.classDistribution.adhd)} ADHD | ${formatCount(options.attentionPrediction.metadataSummary.classDistribution.control)} controle`
+    },
+    {
+      label: "Modo de inferência",
+      value: "Proxy comportamental calibrado por EEG, sem EEG ao vivo."
+    },
+    {
+      label: "Treinado em",
+      value: formatDateTime(options.attentionPrediction.metadataSummary.trainedAt)
+    }
+  );
+
+  return details;
 }
 
 function buildMemoryEvidence(metrics: MetricsSnapshot) {
@@ -214,7 +410,11 @@ function buildMemoryEvidence(metrics: MetricsSnapshot) {
   ];
 }
 
-export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores): KogniffyReport {
+export function generateReport(
+  metrics: MetricsSnapshot,
+  scores: KogniffyScores,
+  options: GenerateReportOptions = {}
+): KogniffyReport {
   const categories: ReportCategory[] = [
     {
       id: "dyslexiaRisk",
@@ -241,7 +441,8 @@ export function generateReport(metrics: MetricsSnapshot, scores: KogniffyScores)
       summary: categorySummary("Atenção", scores.attentionRisk),
       recommendation:
         "Registre se respostas impulsivas ou perda de estímulos aparecem em outros contextos, sempre evitando conclusões clínicas sem avaliação.",
-      evidence: buildAttentionEvidence(metrics)
+      evidence: buildAttentionEvidence(metrics, options),
+      details: buildAttentionDetails(metrics, options)
     },
     {
       id: "memoryReactionRisk",
