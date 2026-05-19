@@ -117,6 +117,10 @@ function topColorConfusion(metrics: MetricsSnapshot) {
   return best;
 }
 
+function hasAttentionPhase(metrics: MetricsSnapshot) {
+  return metrics.attentionPhase.targetSpawns > 0 || metrics.attentionPhase.ruleSummaries.length > 0;
+}
+
 function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
   const phase = metrics.dyslexiaPhase;
 
@@ -174,10 +178,31 @@ function buildColorEvidence(metrics: MetricsSnapshot) {
 }
 
 function buildAttentionEvidence(metrics: MetricsSnapshot) {
+  if (!hasAttentionPhase(metrics)) {
+    return [
+      `${metrics.impulsiveClicks} cliques impulsivos e ${metrics.missedTargets} alvos perdidos foram registrados.`,
+      `Tempo médio de reação: ${formatShortMs(average(metrics.reactionTimes))}.`,
+      `Variação observada na reação: ${formatShortMs(Math.sqrt(variance(metrics.reactionTimes)))}.`
+    ];
+  }
+
+  const phase = metrics.attentionPhase;
+  const startSegment = phase.segmentSummaries[0];
+  const middleSegment = phase.segmentSummaries[1];
+  const endSegment = phase.segmentSummaries[2];
+  const switchLatencies = phase.ruleSummaries
+    .map((summary) => summary.switchFirstHitLatencyMs)
+    .filter((value): value is number => value !== null);
+  const postSwitchErrorRate = average(
+    phase.ruleSummaries.map((summary) => rate(summary.postSwitchErrors, summary.postSwitchErrors + summary.postSwitchHits))
+  );
+
   return [
-    `${metrics.impulsiveClicks} cliques impulsivos e ${metrics.missedTargets} alvos perdidos foram registrados.`,
-    `Tempo médio de reação: ${formatShortMs(average(metrics.reactionTimes))}.`,
-    `Variação observada na reação: ${formatShortMs(Math.sqrt(variance(metrics.reactionTimes)))}.`
+    `${phase.correctHits} acertos em ${phase.targetSpawns} cristais corretos gerados, com ${phase.omissions} omissões e ${phase.distractionsCollected} distrações coletadas.`,
+    `${phase.impulsiveErrors} erro(s) por impulsividade foram registrados, sendo ${phase.wrongCrystalHits} em cristais errados.`,
+    `Tempo médio de reação aos cristais corretos: ${formatShortMs(average(phase.reactionTimes))}, com variação de ${formatShortMs(Math.sqrt(variance(phase.reactionTimes)))}.`,
+    `Após cada mudança de regra, o primeiro acerto levou em média ${formatShortMs(average(switchLatencies))} e a taxa média de erro nos 5s iniciais foi ${percent(postSwitchErrorRate)}.`,
+    `Consistência da fase: início ${percent(rate(startSegment?.hits ?? 0, startSegment?.targetSpawns ?? 0))}, meio ${percent(rate(middleSegment?.hits ?? 0, middleSegment?.targetSpawns ?? 0))} e fim ${percent(rate(endSegment?.hits ?? 0, endSegment?.targetSpawns ?? 0))} de acerto sobre os alvos gerados.`
   ];
 }
 

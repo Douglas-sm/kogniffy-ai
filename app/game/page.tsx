@@ -18,9 +18,9 @@ export default function GamePage() {
         </section>
 
         <section className={styles.help} aria-label="Controles">
-          <div className={styles.helpItem}>Setas: mover</div>
-          <div className={styles.helpItem}>Espaço: pular quando a fase pedir</div>
-          <div className={styles.helpItem}>Clique/toque: avançar falas e interagir</div>
+          <div className={styles.helpItem}>Setas: mover o robô</div>
+          <div className={styles.helpItem}>Encoste nos cristais corretos durante a fase de atenção</div>
+          <div className={styles.helpItem}>Clique/toque: avançar falas e usar painéis</div>
         </section>
 
         <p className={styles.notice}>

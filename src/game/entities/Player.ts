@@ -48,7 +48,7 @@ export class Player {
       return;
     }
 
-    const moveSpeed = 260;
+    const moveSpeed = 340;
     const gravity = 1550;
     const jumpForce = 620;
     const wasGrounded = this.grounded;
@@ -117,10 +117,10 @@ export class Player {
   draw(ctx: CanvasRenderingContext2D, timeMs: number, warp: PlayerDrawWarpEffect | null = null) {
     const centerX = this.x + this.width / 2;
     const warpProgress = warp?.progress ?? 0;
-    const driveRatio = Math.min(1, Math.abs(this.velocityX) / 260);
+    const driveRatio = Math.min(1, Math.abs(this.velocityX) / 340);
     const bounce = this.grounded ? Math.sin(timeMs / 110) * (0.5 + driveRatio * 1.2) : 0;
     const airborneRatio = this.grounded ? 0 : Math.min(1, Math.abs(this.velocityY) / 720 + 0.14);
-    const bodyTilt = (this.velocityX / 260) * 0.08 - this.jumpBurst * 0.08 * this.facing + this.landingCompression * 0.04;
+    const bodyTilt = (this.velocityX / 340) * 0.08 - this.jumpBurst * 0.08 * this.facing + this.landingCompression * 0.04;
     const bodyY = 14 - this.jumpBurst * 5.5 + this.landingCompression * 1.5;
     const headY = -2 - this.jumpBurst * 4.5 + this.landingCompression * 0.8;
     const wheelY = 44 + this.jumpBurst * 1.8 + this.landingCompression * 2.2;

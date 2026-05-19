@@ -3,6 +3,8 @@ import type { ColorCharacterType, ColorDifficulty, ColorPlateType } from "@/colo
 export const METRICS_SESSION_KEY = "kogniffy.metrics.v1";
 
 export type ContrastErrorType = ColorPlateType;
+export type AttentionRuleId = "blue" | "small" | "red" | "bright";
+export type AttentionSegmentId = "start" | "middle" | "end";
 
 export interface AutoHelpRecord {
   scene: string;
@@ -52,6 +54,51 @@ export interface ColorPhaseSnapshot {
   responses: ColorResponseRecord[];
 }
 
+export interface AttentionRuleSummary {
+  ruleId: AttentionRuleId;
+  label: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  targetSpawns: number;
+  hits: number;
+  omissions: number;
+  wrongCrystalHits: number;
+  distractionsCollected: number;
+  impulsiveErrors: number;
+  reactionTimes: number[];
+  switchFirstHitLatencyMs: number | null;
+  postSwitchErrors: number;
+  postSwitchHits: number;
+}
+
+export interface AttentionSegmentSummary {
+  id: AttentionSegmentId;
+  label: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  targetSpawns: number;
+  hits: number;
+  omissions: number;
+  impulsiveErrors: number;
+  distractionsCollected: number;
+  reactionTimes: number[];
+}
+
+export interface AttentionPhaseSnapshot {
+  targetSpawns: number;
+  distractionSpawns: number;
+  correctHits: number;
+  wrongCrystalHits: number;
+  impulsiveErrors: number;
+  distractionsCollected: number;
+  omissions: number;
+  missedCorrectCrystals: number;
+  reactionTimes: number[];
+  autoHelpCount: number;
+  ruleSummaries: AttentionRuleSummary[];
+  segmentSummaries: AttentionSegmentSummary[];
+}
+
 export interface MetricsSnapshot {
   startedAt: number;
   completedAt: number | null;
@@ -77,7 +124,19 @@ export interface MetricsSnapshot {
   maxSequenceLength: number;
   dyslexiaPhase: DyslexiaPhaseSnapshot;
   colorPhase: ColorPhaseSnapshot;
+  attentionPhase: AttentionPhaseSnapshot;
 }
+
+const ATTENTION_SEGMENT_DEFINITIONS: ReadonlyArray<{
+  id: AttentionSegmentId;
+  label: string;
+  startedAtMs: number;
+  endedAtMs: number;
+}> = [
+  { id: "start", label: "início", startedAtMs: 0, endedAtMs: 10_000 },
+  { id: "middle", label: "meio", startedAtMs: 10_000, endedAtMs: 20_000 },
+  { id: "end", label: "fim", startedAtMs: 20_000, endedAtMs: 30_000 }
+];
 
 function createEmptyDyslexiaPhase(): DyslexiaPhaseSnapshot {
   return {
@@ -113,6 +172,35 @@ function createEmptyColorPhase(): ColorPhaseSnapshot {
   };
 }
 
+function createEmptyAttentionSegment(definition: (typeof ATTENTION_SEGMENT_DEFINITIONS)[number]): AttentionSegmentSummary {
+  return {
+    ...definition,
+    targetSpawns: 0,
+    hits: 0,
+    omissions: 0,
+    impulsiveErrors: 0,
+    distractionsCollected: 0,
+    reactionTimes: []
+  };
+}
+
+function createEmptyAttentionPhase(): AttentionPhaseSnapshot {
+  return {
+    targetSpawns: 0,
+    distractionSpawns: 0,
+    correctHits: 0,
+    wrongCrystalHits: 0,
+    impulsiveErrors: 0,
+    distractionsCollected: 0,
+    omissions: 0,
+    missedCorrectCrystals: 0,
+    reactionTimes: [],
+    autoHelpCount: 0,
+    ruleSummaries: [],
+    segmentSummaries: ATTENTION_SEGMENT_DEFINITIONS.map(createEmptyAttentionSegment)
+  };
+}
+
 function cloneDyslexiaPhase(snapshot: DyslexiaPhaseSnapshot): DyslexiaPhaseSnapshot {
   return {
     ...snapshot,
@@ -133,6 +221,29 @@ function cloneColorPhase(snapshot: ColorPhaseSnapshot): ColorPhaseSnapshot {
     ...snapshot,
     responseTimes: [...snapshot.responseTimes],
     responses: snapshot.responses.map(cloneColorResponseRecord)
+  };
+}
+
+function cloneAttentionRuleSummary(summary: AttentionRuleSummary): AttentionRuleSummary {
+  return {
+    ...summary,
+    reactionTimes: [...summary.reactionTimes]
+  };
+}
+
+function cloneAttentionSegmentSummary(summary: AttentionSegmentSummary): AttentionSegmentSummary {
+  return {
+    ...summary,
+    reactionTimes: [...summary.reactionTimes]
+  };
+}
+
+function cloneAttentionPhase(snapshot: AttentionPhaseSnapshot): AttentionPhaseSnapshot {
+  return {
+    ...snapshot,
+    reactionTimes: [...snapshot.reactionTimes],
+    ruleSummaries: snapshot.ruleSummaries.map(cloneAttentionRuleSummary),
+    segmentSummaries: snapshot.segmentSummaries.map(cloneAttentionSegmentSummary)
   };
 }
 
@@ -182,6 +293,22 @@ function toAutoHelpRecords(value: unknown): AutoHelpRecord[] {
       atMs: toNonNegativeInteger(item.atMs)
     }))
     .filter((item) => item.scene.length > 0);
+}
+
+function toAttentionRuleId(value: unknown): AttentionRuleId {
+  if (value === "blue" || value === "small" || value === "red" || value === "bright") {
+    return value;
+  }
+
+  return "blue";
+}
+
+function toAttentionSegmentId(value: unknown, fallback: AttentionSegmentId): AttentionSegmentId {
+  if (value === "start" || value === "middle" || value === "end") {
+    return value;
+  }
+
+  return fallback;
 }
 
 function toDyslexiaPhaseSnapshot(value: unknown): DyslexiaPhaseSnapshot {
@@ -258,6 +385,86 @@ function toColorPhaseSnapshot(value: unknown): ColorPhaseSnapshot {
   };
 }
 
+function toAttentionRuleSummary(value: unknown): AttentionRuleSummary | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const summary = value as Partial<AttentionRuleSummary>;
+
+  return {
+    ruleId: toAttentionRuleId(summary.ruleId),
+    label: typeof summary.label === "string" ? summary.label : "",
+    startedAtMs: toNonNegativeInteger(summary.startedAtMs),
+    endedAtMs: toNonNegativeInteger(summary.endedAtMs),
+    targetSpawns: toNonNegativeInteger(summary.targetSpawns),
+    hits: toNonNegativeInteger(summary.hits),
+    omissions: toNonNegativeInteger(summary.omissions),
+    wrongCrystalHits: toNonNegativeInteger(summary.wrongCrystalHits),
+    distractionsCollected: toNonNegativeInteger(summary.distractionsCollected),
+    impulsiveErrors: toNonNegativeInteger(summary.impulsiveErrors),
+    reactionTimes: toNumberArray(summary.reactionTimes),
+    switchFirstHitLatencyMs:
+      summary.switchFirstHitLatencyMs === null ? null : toNullableTimestamp(summary.switchFirstHitLatencyMs),
+    postSwitchErrors: toNonNegativeInteger(summary.postSwitchErrors),
+    postSwitchHits: toNonNegativeInteger(summary.postSwitchHits)
+  };
+}
+
+function toAttentionSegmentSummary(value: unknown, index: number): AttentionSegmentSummary {
+  const fallback = createEmptyAttentionSegment(
+    ATTENTION_SEGMENT_DEFINITIONS[Math.min(index, ATTENTION_SEGMENT_DEFINITIONS.length - 1)]!
+  );
+
+  if (typeof value !== "object" || value === null) {
+    return fallback;
+  }
+
+  const summary = value as Partial<AttentionSegmentSummary>;
+
+  return {
+    id: toAttentionSegmentId(summary.id, fallback.id),
+    label: typeof summary.label === "string" ? summary.label : fallback.label,
+    startedAtMs: toNonNegativeInteger(summary.startedAtMs, fallback.startedAtMs),
+    endedAtMs: toNonNegativeInteger(summary.endedAtMs, fallback.endedAtMs),
+    targetSpawns: toNonNegativeInteger(summary.targetSpawns),
+    hits: toNonNegativeInteger(summary.hits),
+    omissions: toNonNegativeInteger(summary.omissions),
+    impulsiveErrors: toNonNegativeInteger(summary.impulsiveErrors),
+    distractionsCollected: toNonNegativeInteger(summary.distractionsCollected),
+    reactionTimes: toNumberArray(summary.reactionTimes)
+  };
+}
+
+function toAttentionPhaseSnapshot(value: unknown): AttentionPhaseSnapshot {
+  if (typeof value !== "object" || value === null) {
+    return createEmptyAttentionPhase();
+  }
+
+  const phase = value as Partial<AttentionPhaseSnapshot>;
+  const rawRuleSummaries = Array.isArray(phase.ruleSummaries) ? phase.ruleSummaries : [];
+  const rawSegmentSummaries = Array.isArray(phase.segmentSummaries) ? phase.segmentSummaries : [];
+
+  return {
+    targetSpawns: toNonNegativeInteger(phase.targetSpawns),
+    distractionSpawns: toNonNegativeInteger(phase.distractionSpawns),
+    correctHits: toNonNegativeInteger(phase.correctHits),
+    wrongCrystalHits: toNonNegativeInteger(phase.wrongCrystalHits),
+    impulsiveErrors: toNonNegativeInteger(phase.impulsiveErrors),
+    distractionsCollected: toNonNegativeInteger(phase.distractionsCollected),
+    omissions: toNonNegativeInteger(phase.omissions),
+    missedCorrectCrystals: toNonNegativeInteger(phase.missedCorrectCrystals),
+    reactionTimes: toNumberArray(phase.reactionTimes),
+    autoHelpCount: toNonNegativeInteger(phase.autoHelpCount),
+    ruleSummaries: rawRuleSummaries
+      .map((summary) => toAttentionRuleSummary(summary))
+      .filter((summary): summary is AttentionRuleSummary => summary !== null),
+    segmentSummaries: ATTENTION_SEGMENT_DEFINITIONS.map((_, index) =>
+      toAttentionSegmentSummary(rawSegmentSummaries[index], index)
+    )
+  };
+}
+
 function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -289,7 +496,8 @@ function toMetricsSnapshot(value: unknown): MetricsSnapshot | null {
     sequenceErrors: toNonNegativeInteger(snapshot.sequenceErrors),
     maxSequenceLength: toNonNegativeInteger(snapshot.maxSequenceLength),
     dyslexiaPhase: toDyslexiaPhaseSnapshot(snapshot.dyslexiaPhase),
-    colorPhase: toColorPhaseSnapshot(snapshot.colorPhase)
+    colorPhase: toColorPhaseSnapshot(snapshot.colorPhase),
+    attentionPhase: toAttentionPhaseSnapshot(snapshot.attentionPhase)
   };
 }
 
@@ -318,7 +526,8 @@ function createEmptySnapshot(): MetricsSnapshot {
     sequenceErrors: 0,
     maxSequenceLength: 0,
     dyslexiaPhase: createEmptyDyslexiaPhase(),
-    colorPhase: createEmptyColorPhase()
+    colorPhase: createEmptyColorPhase(),
+    attentionPhase: createEmptyAttentionPhase()
   };
 }
 
@@ -331,8 +540,13 @@ function cloneSnapshot(snapshot: MetricsSnapshot): MetricsSnapshot {
     firstClickTimes: [...snapshot.firstClickTimes],
     reactionTimes: [...snapshot.reactionTimes],
     dyslexiaPhase: cloneDyslexiaPhase(snapshot.dyslexiaPhase),
-    colorPhase: cloneColorPhase(snapshot.colorPhase)
+    colorPhase: cloneColorPhase(snapshot.colorPhase),
+    attentionPhase: cloneAttentionPhase(snapshot.attentionPhase)
   };
+}
+
+function roundMetric(value: number) {
+  return Math.max(0, Math.round(value));
 }
 
 export class MetricsCollector {
@@ -347,15 +561,15 @@ export class MetricsCollector {
   }
 
   recordResponseTime(ms: number) {
-    this.data.responseTimes.push(Math.max(0, Math.round(ms)));
+    this.data.responseTimes.push(roundMetric(ms));
   }
 
   recordHesitationTime(ms: number) {
-    this.data.hesitationTimes.push(Math.max(0, Math.round(ms)));
+    this.data.hesitationTimes.push(roundMetric(ms));
   }
 
   recordFirstClickTime(ms: number) {
-    this.data.firstClickTimes.push(Math.max(0, Math.round(ms)));
+    this.data.firstClickTimes.push(roundMetric(ms));
   }
 
   recordImpulsiveClick() {
@@ -367,7 +581,7 @@ export class MetricsCollector {
   }
 
   recordSequenceScore(score: number) {
-    this.data.sequenceScore = Math.max(this.data.sequenceScore, Math.max(0, score));
+    this.data.sequenceScore = Math.max(this.data.sequenceScore, roundMetric(score));
   }
 
   recordContrastError(type: ContrastErrorType) {
@@ -411,7 +625,7 @@ export class MetricsCollector {
   }
 
   recordReactionTime(ms: number) {
-    this.data.reactionTimes.push(Math.max(0, Math.round(ms)));
+    this.data.reactionTimes.push(roundMetric(ms));
   }
 
   recordSequenceError() {
@@ -419,7 +633,7 @@ export class MetricsCollector {
   }
 
   recordMaxSequenceLength(length: number) {
-    this.data.maxSequenceLength = Math.max(this.data.maxSequenceLength, Math.max(0, length));
+    this.data.maxSequenceLength = Math.max(this.data.maxSequenceLength, roundMetric(length));
   }
 
   recordDyslexiaWordStarted() {
@@ -451,11 +665,11 @@ export class MetricsCollector {
   }
 
   recordDyslexiaResponseTime(ms: number) {
-    this.data.dyslexiaPhase.responseTimes.push(Math.max(0, Math.round(ms)));
+    this.data.dyslexiaPhase.responseTimes.push(roundMetric(ms));
   }
 
   recordDyslexiaFirstClickTime(ms: number) {
-    this.data.dyslexiaPhase.firstClickTimes.push(Math.max(0, Math.round(ms)));
+    this.data.dyslexiaPhase.firstClickTimes.push(roundMetric(ms));
   }
 
   recordDyslexiaAutoHelp() {
@@ -490,7 +704,7 @@ export class MetricsCollector {
 
   recordColorResponse(record: ColorResponseRecord, isFirstAttempt: boolean) {
     this.data.colorPhase.attempts += 1;
-    this.data.colorPhase.responseTimes.push(Math.max(0, Math.round(record.responseTimeMs)));
+    this.data.colorPhase.responseTimes.push(roundMetric(record.responseTimeMs));
     this.data.colorPhase.responses.push(cloneColorResponseRecord(record));
 
     if (record.correct) {
@@ -508,6 +722,143 @@ export class MetricsCollector {
     this.data.colorPhase.autoHelpCount += 1;
   }
 
+  startAttentionRule(ruleId: AttentionRuleId, label: string, startedAtMs: number) {
+    const activeRule = this.currentAttentionRule();
+
+    if (activeRule) {
+      activeRule.endedAtMs = Math.max(activeRule.startedAtMs, roundMetric(startedAtMs));
+    }
+
+    this.data.attentionPhase.ruleSummaries.push({
+      ruleId,
+      label,
+      startedAtMs: roundMetric(startedAtMs),
+      endedAtMs: roundMetric(startedAtMs),
+      targetSpawns: 0,
+      hits: 0,
+      omissions: 0,
+      wrongCrystalHits: 0,
+      distractionsCollected: 0,
+      impulsiveErrors: 0,
+      reactionTimes: [],
+      switchFirstHitLatencyMs: null,
+      postSwitchErrors: 0,
+      postSwitchHits: 0
+    });
+  }
+
+  completeAttentionRule(endedAtMs: number) {
+    const activeRule = this.currentAttentionRule();
+
+    if (!activeRule) {
+      return;
+    }
+
+    activeRule.endedAtMs = Math.max(activeRule.startedAtMs, roundMetric(endedAtMs));
+  }
+
+  recordAttentionTargetSpawn(activeTimeMs: number) {
+    this.data.attentionPhase.targetSpawns += 1;
+    this.currentAttentionRule()!.targetSpawns += 1;
+    this.segmentForAttentionTime(activeTimeMs).targetSpawns += 1;
+  }
+
+  recordAttentionDistractionSpawn() {
+    this.data.attentionPhase.distractionSpawns += 1;
+  }
+
+  recordAttentionCorrectHit(activeTimeMs: number, reactionTimeMs: number) {
+    const reactionTime = roundMetric(reactionTimeMs);
+    const rule = this.currentAttentionRule();
+    const segment = this.segmentForAttentionTime(activeTimeMs);
+
+    this.recordReactionTime(reactionTime);
+    this.data.attentionPhase.correctHits += 1;
+    this.data.attentionPhase.reactionTimes.push(reactionTime);
+    segment.hits += 1;
+    segment.reactionTimes.push(reactionTime);
+
+    if (!rule) {
+      return;
+    }
+
+    rule.hits += 1;
+    rule.reactionTimes.push(reactionTime);
+
+    const isPostSwitchWindow = roundMetric(activeTimeMs) - rule.startedAtMs <= 5_000;
+
+    if (rule.switchFirstHitLatencyMs === null) {
+      rule.switchFirstHitLatencyMs = Math.max(0, roundMetric(activeTimeMs) - rule.startedAtMs);
+    }
+
+    if (isPostSwitchWindow) {
+      rule.postSwitchHits += 1;
+    }
+  }
+
+  recordAttentionWrongCrystalHit(activeTimeMs: number) {
+    const rule = this.currentAttentionRule();
+    const segment = this.segmentForAttentionTime(activeTimeMs);
+
+    this.recordImpulsiveClick();
+    this.data.attentionPhase.wrongCrystalHits += 1;
+    this.data.attentionPhase.impulsiveErrors += 1;
+    segment.impulsiveErrors += 1;
+
+    if (!rule) {
+      return;
+    }
+
+    rule.wrongCrystalHits += 1;
+    rule.impulsiveErrors += 1;
+
+    if (roundMetric(activeTimeMs) - rule.startedAtMs <= 5_000) {
+      rule.postSwitchErrors += 1;
+    }
+  }
+
+  recordAttentionDistractionCollected(activeTimeMs: number) {
+    const rule = this.currentAttentionRule();
+    const segment = this.segmentForAttentionTime(activeTimeMs);
+
+    this.recordImpulsiveClick();
+    this.data.attentionPhase.distractionsCollected += 1;
+    this.data.attentionPhase.impulsiveErrors += 1;
+    segment.impulsiveErrors += 1;
+    segment.distractionsCollected += 1;
+
+    if (!rule) {
+      return;
+    }
+
+    rule.distractionsCollected += 1;
+    rule.impulsiveErrors += 1;
+
+    if (roundMetric(activeTimeMs) - rule.startedAtMs <= 5_000) {
+      rule.postSwitchErrors += 1;
+    }
+  }
+
+  recordAttentionOmission(activeTimeMs: number) {
+    const rule = this.currentAttentionRule();
+    const segment = this.segmentForAttentionTime(activeTimeMs);
+
+    this.recordMissedTarget();
+    this.data.attentionPhase.omissions += 1;
+    this.data.attentionPhase.missedCorrectCrystals += 1;
+    segment.omissions += 1;
+
+    if (!rule) {
+      return;
+    }
+
+    rule.omissions += 1;
+  }
+
+  recordAttentionAutoHelp() {
+    this.data.attentionPhase.autoHelpCount += 1;
+  }
+
   finalize() {
     this.data.completedAt = Date.now();
     this.data.totalTimeMs = this.data.completedAt - this.data.startedAt;
@@ -520,6 +871,30 @@ export class MetricsCollector {
       ? this.data.totalTimeMs
       : Date.now() - this.data.startedAt;
     return snapshot;
+  }
+
+  private currentAttentionRule() {
+    const rules = this.data.attentionPhase.ruleSummaries;
+    return rules.length > 0 ? rules[rules.length - 1]! : null;
+  }
+
+  private segmentForAttentionTime(activeTimeMs: number) {
+    const segmentIndex = this.attentionSegmentIndex(activeTimeMs);
+    return this.data.attentionPhase.segmentSummaries[segmentIndex]!;
+  }
+
+  private attentionSegmentIndex(activeTimeMs: number) {
+    const time = roundMetric(activeTimeMs);
+
+    if (time >= 20_000) {
+      return 2;
+    }
+
+    if (time >= 10_000) {
+      return 1;
+    }
+
+    return 0;
   }
 }
 

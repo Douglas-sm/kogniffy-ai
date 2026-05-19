@@ -60,6 +60,10 @@ function missRateFromResponses(
   );
 }
 
+function hasAttentionPhase(metrics: MetricsSnapshot) {
+  return metrics.attentionPhase.targetSpawns > 0 || metrics.attentionPhase.ruleSummaries.length > 0;
+}
+
 export function bandForScore(score: number): RiskBand {
   if (score <= 35) {
     return "baixo";
@@ -112,8 +116,6 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const avgResponse = average(metrics.responseTimes);
   const avgHesitation = average(metrics.hesitationTimes);
   const avgFirstClick = average(metrics.firstClickTimes);
-  const reactionVariance = Math.sqrt(variance(metrics.reactionTimes));
-  const avgReaction = average(metrics.reactionTimes);
   const colorAvgResponse = average(metrics.colorPhase.responseTimes);
   const colorResponseDeviation = Math.sqrt(variance(metrics.colorPhase.responseTimes));
   const redGreenMissRate = missRateFromResponses(metrics, (response) => response.trialType === "redGreen");
@@ -124,6 +126,35 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const firstChoiceMissRate = rate(metrics.colorPhase.firstChoiceMisses, metrics.colorPhase.startedTrials);
   const autoHelpRate = rate(metrics.colorPhase.autoHelpCount, metrics.colorPhase.startedTrials);
   const accuracyPenalty = 1 - rate(metrics.colorPhase.hits, metrics.colorPhase.attempts);
+  const attentionUsesPhase = hasAttentionPhase(metrics);
+  const attentionReactionTimes = attentionUsesPhase ? metrics.attentionPhase.reactionTimes : metrics.reactionTimes;
+  const attentionReactionDeviation = Math.sqrt(variance(attentionReactionTimes));
+  const attentionAvgReaction = average(attentionReactionTimes);
+  const attentionStartSegment = metrics.attentionPhase.segmentSummaries[0];
+  const attentionEndSegment = metrics.attentionPhase.segmentSummaries[2];
+  const attentionSegmentHitRates = metrics.attentionPhase.segmentSummaries.map((segment) =>
+    rate(segment.hits, segment.targetSpawns)
+  );
+  const attentionOmissionRate = rate(metrics.attentionPhase.omissions, metrics.attentionPhase.targetSpawns);
+  const attentionImpulsiveRate = rate(
+    metrics.attentionPhase.impulsiveErrors,
+    metrics.attentionPhase.correctHits + metrics.attentionPhase.impulsiveErrors
+  );
+  const attentionDistractionRate = rate(
+    metrics.attentionPhase.distractionsCollected,
+    metrics.attentionPhase.distractionSpawns
+  );
+  const attentionSwitchLatencies = metrics.attentionPhase.ruleSummaries
+    .map((summary) => summary.switchFirstHitLatencyMs)
+    .filter((value): value is number => value !== null);
+  const attentionAvgSwitchLatency = average(attentionSwitchLatencies);
+  const attentionPostSwitchErrorRate = average(
+    metrics.attentionPhase.ruleSummaries.map((summary) =>
+      rate(summary.postSwitchErrors, summary.postSwitchErrors + summary.postSwitchHits)
+    )
+  );
+  const earlyMissRate = attentionStartSegment ? rate(attentionStartSegment.omissions, attentionStartSegment.targetSpawns) : 0;
+  const lateMissRate = attentionEndSegment ? rate(attentionEndSegment.omissions, attentionEndSegment.targetSpawns) : 0;
 
   const dyslexiaValue =
     metrics.inversionErrors * 17 +
@@ -150,18 +181,28 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
         metrics.lowContrastErrors * 8;
 
   const attentionValue =
-    metrics.impulsiveClicks * 12 +
-    metrics.missedTargets * 14 +
-    reactionVariance / 45 +
-    avgReaction / 220 +
-    metrics.repeatedErrors * 3;
+    attentionUsesPhase
+      ? attentionOmissionRate * 26 +
+        attentionImpulsiveRate * 18 +
+        attentionDistractionRate * 12 +
+        attentionAvgReaction / 260 +
+        attentionReactionDeviation / 65 +
+        attentionAvgSwitchLatency / 220 +
+        attentionPostSwitchErrorRate * 16 +
+        Math.max(0, lateMissRate - earlyMissRate) * 12 +
+        Math.sqrt(variance(attentionSegmentHitRates)) * 16
+      : metrics.impulsiveClicks * 12 +
+        metrics.missedTargets * 14 +
+        Math.sqrt(variance(metrics.reactionTimes)) / 45 +
+        average(metrics.reactionTimes) / 220 +
+        metrics.repeatedErrors * 3;
 
   const rememberedBonus = Math.max(0, 6 - metrics.maxSequenceLength) * 9;
   const memoryValue =
     metrics.sequenceErrors * 14 +
     rememberedBonus +
     Math.max(0, 5 - metrics.sequenceScore) * 6 +
-    avgReaction / 260;
+    average(metrics.reactionTimes) / 260;
 
   const dyslexiaRisk = createScore(dyslexiaValue);
   const colorVisionRisk = createScore(colorVisionValue);

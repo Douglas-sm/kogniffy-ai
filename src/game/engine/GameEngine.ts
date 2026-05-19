@@ -39,6 +39,11 @@ export interface PointerState extends PointerPosition {
   pointerType: string | null;
 }
 
+export interface CameraOffset {
+  x: number;
+  y: number;
+}
+
 export type SceneSpawnSide = "left" | "right";
 export type SceneExitMode = "none" | "cave" | "portal";
 
@@ -57,6 +62,7 @@ export interface GameScene {
   onKeyDown?(engine: GameEngine, key: string): void;
   onAutoHelp?(engine: GameEngine): void;
   getCanvasCursor?(engine: GameEngine): string;
+  getCameraOffset?(engine: GameEngine): CameraOffset;
   drawPointerOverlay?(engine: GameEngine, ctx: CanvasRenderingContext2D): void;
   getExitZone?(engine: GameEngine): Rect | null;
 }
@@ -234,10 +240,19 @@ export class GameEngine {
     this.currentScene.update(this, dt);
     this.updateSceneExit();
     this.currentScene.draw(this, this.ctx);
-    this.drawSceneExit();
     const warpEffect = this.getWarpEffect();
+    const cameraOffset = this.currentScene.getCameraOffset?.(this) ?? null;
+
+    this.ctx.save();
+
+    if (cameraOffset) {
+      this.ctx.translate(cameraOffset.x, cameraOffset.y);
+    }
+
+    this.drawSceneExit();
     this.player.draw(this.ctx, this.timeMs, warpEffect);
     this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs, warpEffect);
+    this.ctx.restore();
     this.hud.draw(this.ctx, this);
     this.dialogBox.draw(this.ctx);
     this.currentScene.drawPointerOverlay?.(this, this.ctx);

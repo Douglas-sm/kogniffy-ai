@@ -13,7 +13,7 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export async function GET(
   _: Request,
-  context: { params: Promise<{ asset: string }> | { asset: string } }
+  context: { params: Promise<{ asset: string }> }
 ) {
   const { asset } = await context.params;
   const contentType = CONTENT_TYPES[asset];
