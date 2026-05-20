@@ -114,7 +114,7 @@ Expected CSV columns:
 avgResponseTime,hesitationTime,repeatedErrors,impulsiveClicks,sequenceMemoryScore,colorContrastErrors,letterInversionErrors,reactionVariance,dyslexiaRisk,colorVisionRisk,attentionRisk,memoryReactionRisk
 ```
 
-Labels can be `0..1` or `0..100`. The script normalizes feature columns, trains a small dense neural network, and saves:
+Labels can be `0..1` or `0..100`. The training scripts save TensorFlow artifacts under `models/<domain>/`:
 
 ```text
 models/kogniffy/model.json
@@ -122,7 +122,7 @@ models/kogniffy/*.bin
 models/kogniffy/normalization.json
 ```
 
-Generated model files are ignored by Git by default.
+The runtime model assets used by `app/api/models/*` are kept in Git so the report page can run after clone. Local-only datasets, manifests, session exports, and the experimental `models/kogniffy` output stay ignored by default.
 
 ## Suggested Datasets
 

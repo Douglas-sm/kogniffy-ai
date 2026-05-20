@@ -1,0 +1,61 @@
+{
+  "features": [
+    "avgClicksPerQuestion",
+    "avgHitsPerQuestion",
+    "avgMissesPerQuestion",
+    "hitRate",
+    "missRate",
+    "clicksPerHit",
+    "missesPerHit"
+  ],
+  "normalization": [
+    {
+      "feature": "avgClicksPerQuestion",
+      "mean": 8.158161865569278,
+      "std": 3.9234115334649933
+    },
+    {
+      "feature": "avgHitsPerQuestion",
+      "mean": 3.5041838134430785,
+      "std": 2.120564098344824
+    },
+    {
+      "feature": "avgMissesPerQuestion",
+      "mean": 1.401783264746219,
+      "std": 1.8335009699667568
+    },
+    {
+      "feature": "hitRate",
+      "mean": 0.4656424510227883,
+      "std": 0.2555170477715079
+    },
+    {
+      "feature": "missRate",
+      "mean": 0.1612991168414995,
+      "std": 0.14075280093491188
+    },
+    {
+      "feature": "clicksPerHit",
+      "mean": 3.262159139060539,
+      "std": 2.9774146320403245
+    },
+    {
+      "feature": "missesPerHit",
+      "mean": 0.7790641998131455,
+      "std": 1.3009825875256107
+    }
+  ],
+  "questionIds": [
+    1,
+    2,
+    3,
+    4,
+    27
+  ],
+  "rowCount": 3644,
+  "classDistribution": {
+    "noDyslexia": 3252,
+    "dyslexia": 392
+  },
+  "trainedAt": "2026-05-17T04:10:01.560Z"
+}

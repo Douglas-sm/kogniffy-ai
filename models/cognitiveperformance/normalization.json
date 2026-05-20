@@ -1,0 +1,31 @@
+{
+  "features": [
+    "reactionTimeProxyMs",
+    "memoryTestProxyScore"
+  ],
+  "normalization": [
+    {
+      "feature": "reactionTimeProxyMs",
+      "mean": 399.94825515624757,
+      "std": 115.5290707409042
+    },
+    {
+      "feature": "memoryTestProxyScore",
+      "mean": 69.51465625,
+      "std": 17.309000482920382
+    }
+  ],
+  "sourceDataset": "data/raw/cognitiveperformance/human_cognitive_performance.csv",
+  "targetColumn": "AI_Predicted_Score",
+  "rowCount": 80000,
+  "trainRowCount": 64000,
+  "validationRowCount": 16000,
+  "proxyDefinitionVersion": "v1",
+  "trainingMetrics": {
+    "loss": 0.011350130662322044,
+    "mae": 0.08592313528060913,
+    "valLoss": 0.011315552517771721,
+    "valMae": 0.08573448657989502
+  },
+  "trainedAt": "2026-05-19T14:41:12.255Z"
+}

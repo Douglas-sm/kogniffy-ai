@@ -1,0 +1,78 @@
+{
+  "features": [
+    "accuracy",
+    "missRate",
+    "avgResponseTime",
+    "responseTimeDeviation",
+    "redGreenMissRate",
+    "blueYellowMissRate",
+    "lowContrastMissRate",
+    "letterMissRate",
+    "digitMissRate",
+    "firstChoiceMissRate",
+    "autoHelpRate"
+  ],
+  "normalization": [
+    {
+      "feature": "accuracy",
+      "mean": 0.630176445833334,
+      "std": 0.1707850417139788
+    },
+    {
+      "feature": "missRate",
+      "mean": 0.3698235541666662,
+      "std": 0.1707850417139787
+    },
+    {
+      "feature": "avgResponseTime",
+      "mean": 1831.8448760791662,
+      "std": 281.7349145032851
+    },
+    {
+      "feature": "responseTimeDeviation",
+      "mean": 292.5961659187497,
+      "std": 63.931088192031474
+    },
+    {
+      "feature": "redGreenMissRate",
+      "mean": 0.3472611125000002,
+      "std": 0.2510861722094416
+    },
+    {
+      "feature": "blueYellowMissRate",
+      "mean": 0.3319014916666668,
+      "std": 0.24707203231040037
+    },
+    {
+      "feature": "lowContrastMissRate",
+      "mean": 0.3097568333333334,
+      "std": 0.24330337522492948
+    },
+    {
+      "feature": "letterMissRate",
+      "mean": 0.3572670333333337,
+      "std": 0.20715067074354857
+    },
+    {
+      "feature": "digitMissRate",
+      "mean": 0.35037723333333365,
+      "std": 0.21033620303207357
+    },
+    {
+      "feature": "firstChoiceMissRate",
+      "mean": 0.4390625,
+      "std": 0.21277728133177073
+    },
+    {
+      "feature": "autoHelpRate",
+      "mean": 0.0734375,
+      "std": 0.11398849999681551
+    }
+  ],
+  "rowCount": 600,
+  "classDistribution": {
+    "noColorBlind": 240,
+    "colorBlind": 360
+  },
+  "trainedAt": "2026-05-18T17:51:38.692Z"
+}
