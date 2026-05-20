@@ -2,6 +2,9 @@ import type { AttentionPrediction } from "@/ai/adhdModel";
 import { ATTENTION_RULE_LABELS } from "@/ai/adhdFeatures";
 import type { CognitivePerformancePrediction } from "@/ai/cognitivePerformanceModel";
 import { buildCognitivePerformanceProxySnapshot } from "@/ai/cognitivePerformanceFeatures";
+import type { ReactionTimePrediction } from "@/ai/reactionTimeModel";
+import { buildReactionTimeProxySnapshot, type ReactionTimeCategory } from "@/ai/reactionTimeFeatures";
+import { calculateMemoryReactionHeuristicRisk } from "@/ai/scoring";
 import type { KogniffyScores, RiskBand, RiskScore } from "@/ai/scoring";
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
 
@@ -35,6 +38,8 @@ interface GenerateReportOptions {
   attentionPrediction?: AttentionPrediction | null;
   attentionHeuristicScore?: number;
   cognitivePerformancePrediction?: CognitivePerformancePrediction | null;
+  reactionTimePrediction?: ReactionTimePrediction | null;
+  memoryReactionHeuristicScore?: number;
 }
 
 function average(values: number[]) {
@@ -97,6 +102,11 @@ function formatSigned(value: number) {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
+function formatSignedMs(value: number) {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${(Math.abs(value) / 1000).toFixed(1)}s`;
+}
+
 function bandText(band: RiskBand) {
   if (band === "baixo") {
     return "baixo";
@@ -111,6 +121,18 @@ function bandText(band: RiskBand) {
 
 function categorySummary(label: string, score: RiskScore) {
   return `${label}: pontuação indicativa em nível ${bandText(score.band)}, calculada a partir dos sinais observados durante a experiência.`;
+}
+
+function reactionCategoryLabel(category: ReactionTimeCategory) {
+  if (category === "good") {
+    return "rápida";
+  }
+
+  if (category === "average") {
+    return "intermediária";
+  }
+
+  return "lenta";
 }
 
 function missRateForColorGroup(metrics: MetricsSnapshot, predicate: (trialType: string) => boolean) {
@@ -408,12 +430,97 @@ function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReport
   return details;
 }
 
-function buildMemoryEvidence(metrics: MetricsSnapshot) {
-  return [
-    `Maior sequência alcançada: ${metrics.maxSequenceLength}.`,
-    `Pontuação de sequência registrada: ${metrics.sequenceScore}.`,
-    `${metrics.sequenceErrors} erro(s) de sequência apareceram durante a fase de memória/reação.`
+function buildMemoryEvidence(metrics: MetricsSnapshot, options: GenerateReportOptions) {
+  const prediction = options.reactionTimePrediction;
+  const snapshot = prediction?.proxyMetrics ?? buildReactionTimeProxySnapshot(metrics);
+  const memoryHeuristicScore = options.memoryReactionHeuristicScore ?? calculateMemoryReactionHeuristicRisk(metrics);
+  const evidence = [
+    `Tempo médio para iniciar cada rodada do painel: ${formatShortMs(snapshot.primaryResponseTimeMs)}, com ${formatShortMs(snapshot.interClickTimeMs)} entre toques corretos consecutivos.`,
+    `Consistência da reação nesta fase: variação de ${formatShortMs(snapshot.reactionStdMs)} entre respostas e deriva de ${formatSignedMs(snapshot.fatigueDeltaMs)} do início ao fim.`,
+    `Maior sequência confirmada: ${formatCount(snapshot.maxSequenceReached)} em ${formatCount(snapshot.roundsPlayed)} rodada(s), com ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`,
+    `Leitura heurística da memória observada no painel: ${formatScore(memoryHeuristicScore)}.`
   ];
+
+  if (prediction) {
+    evidence.push(
+      `Leitura calibrada de reação: faixa ${reactionCategoryLabel(prediction.dominantCategory)}, com desempenho previsto de ${formatScore(prediction.performanceScore)} e risco de reação de ${formatScore(prediction.riskScore)}.`
+    );
+    evidence.push(
+      "Na base de treino, reações mais lentas costumam aparecer junto de mais fadiga, estresse e menor concentração, mas esses fatores não foram medidos diretamente nesta sessão."
+    );
+  }
+
+  return evidence;
+}
+
+function buildMemoryDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  const prediction = options.reactionTimePrediction;
+  const snapshot = prediction?.proxyMetrics ?? buildReactionTimeProxySnapshot(metrics);
+  const memoryHeuristicScore = options.memoryReactionHeuristicScore ?? calculateMemoryReactionHeuristicRisk(metrics);
+  const details: ReportCategoryDetail[] = [
+    {
+      label: "Heurística de memória",
+      value: formatScore(memoryHeuristicScore)
+    },
+    {
+      label: "Consistência da reação",
+      value: `desvio ${formatShortMs(snapshot.reactionStdMs)} | deriva ${formatSignedMs(snapshot.fatigueDeltaMs)}`
+    },
+    {
+      label: "Rodadas analisadas",
+      value: `${formatCount(snapshot.roundsPlayed)} rodada(s)`
+    }
+  ];
+
+  if (!prediction) {
+    return details;
+  }
+
+  details.unshift(
+    {
+      label: "Risco do modelo de reação",
+      value: formatScore(prediction.riskScore)
+    },
+    {
+      label: "Faixa prevista",
+      value: reactionCategoryLabel(prediction.dominantCategory)
+    }
+  );
+
+  details.push({
+    label: "Composição final",
+    value: "50% reação calibrada na base + 50% memória observada no jogo"
+  });
+  details.push({
+    label: "Modo de inferência",
+    value:
+      prediction.source === "model"
+        ? "Modelo treinado com a base Reaction Time Dataset."
+        : "Fallback interpolado pelos limiares da base Reaction Time Dataset."
+  });
+
+  if (prediction.metadataSummary) {
+    details.push(
+      {
+        label: "Fonte de treino",
+        value: `${prediction.metadataSummary.sourceDataset} | alvo ${prediction.metadataSummary.targetColumn}`
+      },
+      {
+        label: "Distribuição da base",
+        value: `${formatCount(prediction.metadataSummary.classDistribution.good)} good | ${formatCount(prediction.metadataSummary.classDistribution.average)} average | ${formatCount(prediction.metadataSummary.classDistribution.bad)} bad`
+      },
+      {
+        label: "Feature de treino",
+        value: prediction.metadataSummary.featureColumnsUsed.join(", ")
+      },
+      {
+        label: "Treinado em",
+        value: formatDateTime(prediction.metadataSummary.trainedAt)
+      }
+    );
+  }
+
+  return details;
 }
 
 function buildCognitivePerformanceEvidence(
@@ -422,10 +529,9 @@ function buildCognitivePerformanceEvidence(
 ) {
   const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
   const evidence = [
-    `Tempo médio para iniciar cada rodada do painel: ${formatShortMs(snapshot.primaryResponseTimeMs)}.`,
-    `Tempo médio entre acertos consecutivos: ${formatShortMs(snapshot.interClickTimeMs)}.`,
+    `O proxy global combinou reação ${formatShortMs(snapshot.reactionTimeProxyMs)} e memória ${Math.round(snapshot.memoryTestProxyScore)}/99.`,
     `Maior sequência confirmada: ${formatCount(snapshot.maxSequenceReached)}, com ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`,
-    `Proxies comportamentais usados no score: reação ${formatShortMs(snapshot.reactionTimeProxyMs)} e memória ${Math.round(snapshot.memoryTestProxyScore)}/99.`
+    "Este bloco resume velocidade, memória de trabalho e impulsividade como um indicador educacional agregado."
   ];
 
   if (prediction) {
@@ -456,12 +562,8 @@ function buildCognitivePerformanceDetails(
       value: formatScore(prediction.riskScore)
     },
     {
-      label: "Tempo médio inicial",
-      value: formatShortMs(snapshot.primaryResponseTimeMs)
-    },
-    {
-      label: "Tempo médio entre cliques",
-      value: formatShortMs(snapshot.interClickTimeMs)
+      label: "Proxy comportamental",
+      value: `reação ${formatShortMs(snapshot.reactionTimeProxyMs)} | memória ${Math.round(snapshot.memoryTestProxyScore)}/99`
     },
     {
       label: "Maior sequência",
@@ -544,8 +646,9 @@ export function generateReport(
       score: scores.memoryReactionRisk,
       summary: categorySummary("Memória/Reação", scores.memoryReactionRisk),
       recommendation:
-        "Repita atividades lúdicas de sequência e reação em momentos diferentes e procure orientação especializada para interpretar padrões consistentes.",
-      evidence: buildMemoryEvidence(metrics)
+        "Repita a fase em momentos descansados e compare se a mesma lentidão, perda de sequência ou impulsividade volta a aparecer antes de tirar conclusões.",
+      evidence: buildMemoryEvidence(metrics, options),
+      details: buildMemoryDetails(metrics, options)
     },
     {
       id: "cognitivePerformanceRisk",

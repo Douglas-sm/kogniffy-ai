@@ -26,7 +26,7 @@ export class IntroScene implements GameScene {
   enter(engine: GameEngine) {
     engine.dialogBox.setLines([
       "Kog perdeu a nave e ficou preso do outro lado da montanha. A melhor saída é entrar pela caverna e atravessar por dentro.",
-      "Use as setas esquerda e direita para andar em linha reta até a entrada da caverna. Quando você chegar lá, a próxima fase abre sozinha."
+      "Use as setas esquerda e direita para andar até a entrada da caverna."
     ]);
   }
 

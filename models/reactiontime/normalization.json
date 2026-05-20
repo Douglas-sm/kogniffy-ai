@@ -1,0 +1,33 @@
+{
+  "features": [
+    "reactionTimeProxyMs"
+  ],
+  "normalization": [
+    {
+      "feature": "reactionTimeProxyMs",
+      "mean": 495.2874421513446,
+      "std": 195.58909581927966
+    }
+  ],
+  "sourceDataset": "data/raw/reactiontime/reaction_time_dataset.csv",
+  "targetColumn": "category",
+  "rowCount": 1998,
+  "trainRowCount": 1599,
+  "validationRowCount": 399,
+  "classDistribution": {
+    "good": 666,
+    "average": 666,
+    "bad": 666
+  },
+  "featureColumnsUsed": [
+    "visual_reaction_time"
+  ],
+  "proxyDefinitionVersion": "v1",
+  "trainingMetrics": {
+    "loss": 0.07096973061561584,
+    "accuracy": 0.973108172416687,
+    "valLoss": 0.0744052305817604,
+    "valAccuracy": 0.9749373197555542
+  },
+  "trainedAt": "2026-05-20T13:44:41.035Z"
+}

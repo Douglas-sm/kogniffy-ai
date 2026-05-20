@@ -7,12 +7,15 @@ import { predictAttentionRisk } from "@/ai/adhdModel";
 import { predictColorVisionRisk } from "@/ai/colorblindModel";
 import { predictCognitivePerformance } from "@/ai/cognitivePerformanceModel";
 import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
+import { predictReactionTimeRisk } from "@/ai/reactionTimeModel";
 import {
+  calculateMemoryReactionCompositeRisk,
   calculateScores,
   overrideAttentionRisk,
   overrideCognitivePerformanceRisk,
   overrideColorVisionRisk,
-  overrideDyslexiaRisk
+  overrideDyslexiaRisk,
+  overrideMemoryReactionRisk
 } from "@/ai/scoring";
 import { loadMetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
@@ -23,6 +26,15 @@ type ReportState = {
   values: number[];
   labels: string[];
 };
+
+const HIDDEN_DETAIL_LABELS = new Set([
+  "Modo de inferência",
+  "Fonte de treino",
+  "Base usada",
+  "Treinado em",
+  "Distribuição da base",
+  "Feature de treino"
+]);
 
 function colorForValue(value: number) {
   if (value <= 35) {
@@ -61,7 +73,8 @@ export default function ReportPage() {
 
       const heuristicScores = calculateScores(metrics);
       const heuristicReport = generateReport(metrics, heuristicScores, {
-        attentionHeuristicScore: heuristicScores.attentionRisk.value
+        attentionHeuristicScore: heuristicScores.attentionRisk.value,
+        memoryReactionHeuristicScore: heuristicScores.memoryReactionRisk.value
       });
 
       setState(
@@ -74,13 +87,19 @@ export default function ReportPage() {
         ])
       );
 
-      const [predictedDyslexiaRisk, predictedColorVisionRisk, attentionPrediction, cognitivePerformancePrediction] =
-        await Promise.all([
-          predictDyslexiaRisk(metrics),
-          predictColorVisionRisk(metrics),
-          predictAttentionRisk(metrics),
-          predictCognitivePerformance(metrics)
-        ]);
+      const [
+        predictedDyslexiaRisk,
+        predictedColorVisionRisk,
+        attentionPrediction,
+        cognitivePerformancePrediction,
+        reactionTimePrediction
+      ] = await Promise.all([
+        predictDyslexiaRisk(metrics),
+        predictColorVisionRisk(metrics),
+        predictAttentionRisk(metrics),
+        predictCognitivePerformance(metrics),
+        predictReactionTimeRisk(metrics)
+      ]);
 
       if (!active) {
         return;
@@ -100,6 +119,16 @@ export default function ReportPage() {
         modelScores = overrideAttentionRisk(modelScores, attentionPrediction.score);
       }
 
+      if (reactionTimePrediction !== null) {
+        modelScores = overrideMemoryReactionRisk(
+          modelScores,
+          calculateMemoryReactionCompositeRisk(
+            reactionTimePrediction.riskScore,
+            heuristicScores.memoryReactionRisk.value
+          )
+        );
+      }
+
       if (cognitivePerformancePrediction !== null) {
         modelScores = overrideCognitivePerformanceRisk(modelScores, cognitivePerformancePrediction.riskScore);
       }
@@ -107,7 +136,9 @@ export default function ReportPage() {
       const report = generateReport(metrics, modelScores, {
         attentionPrediction,
         attentionHeuristicScore: heuristicScores.attentionRisk.value,
-        cognitivePerformancePrediction
+        cognitivePerformancePrediction,
+        reactionTimePrediction,
+        memoryReactionHeuristicScore: heuristicScores.memoryReactionRisk.value
       });
 
       setState(
@@ -267,33 +298,38 @@ export default function ReportPage() {
         </section>
 
         <section className={styles.categories} aria-label="Análise por categoria">
-          {state.report.categories.map((category) => (
-            <article className={styles.category} key={category.id}>
-              <div className={styles.categoryHeader}>
-                <h2>{category.label}</h2>
-                <span className={`${styles.score} ${styles[category.score.band]}`}>
-                  {category.score.value}/100
-                </span>
-              </div>
-              <p>{category.summary}</p>
-              <ul className={styles.evidenceList}>
-                {category.evidence.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              {category.details && category.details.length > 0 ? (
-                <dl className={styles.detailList}>
-                  {category.details.map((detail) => (
-                    <div className={styles.detailRow} key={`${category.id}-${detail.label}`}>
-                      <dt>{detail.label}</dt>
-                      <dd>{detail.value}</dd>
-                    </div>
+          {state.report.categories.map((category) => {
+            const visibleDetails =
+              category.details?.filter((detail) => !HIDDEN_DETAIL_LABELS.has(detail.label)) ?? [];
+
+            return (
+              <article className={styles.category} key={category.id}>
+                <div className={styles.categoryHeader}>
+                  <h2>{category.label}</h2>
+                  <span className={`${styles.score} ${styles[category.score.band]}`}>
+                    {category.score.value}/100
+                  </span>
+                </div>
+                <p>{category.summary}</p>
+                <ul className={styles.evidenceList}>
+                  {category.evidence.map((item) => (
+                    <li key={item}>{item}</li>
                   ))}
-                </dl>
-              ) : null}
-              <p>{category.recommendation}</p>
-            </article>
-          ))}
+                </ul>
+                {visibleDetails.length > 0 ? (
+                  <dl className={styles.detailList}>
+                    {visibleDetails.map((detail) => (
+                      <div className={styles.detailRow} key={`${category.id}-${detail.label}`}>
+                        <dt>{detail.label}</dt>
+                        <dd>{detail.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+                <p>{category.recommendation}</p>
+              </article>
+            );
+          })}
         </section>
       </div>
     </main>
