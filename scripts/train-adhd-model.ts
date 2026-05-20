@@ -134,6 +134,22 @@ function lastHistoryValue(history: tfFallback.History["history"], ...keys: strin
   return undefined;
 }
 
+function lastNumericHistoryValue(history: tfFallback.History["history"], ...keys: string[]) {
+  const value = lastHistoryValue(history, ...keys);
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (value instanceof tfFallback.Tensor) {
+    const metric = value.dataSync()[0];
+    value.dispose();
+    return typeof metric === "number" && Number.isFinite(metric) ? metric : undefined;
+  }
+
+  return undefined;
+}
+
 async function loadTensorFlow(): Promise<TensorFlowModule> {
   try {
     const tfNode = (await dynamicImport("@tensorflow/tfjs-node")) as TensorFlowModule;
@@ -642,11 +658,11 @@ async function main() {
     }
   });
 
-  const finalMetrics = {
-    loss: lastHistoryValue(history.history, "loss") ?? null,
-    accuracy: lastHistoryValue(history.history, "acc", "accuracy") ?? null,
-    valLoss: lastHistoryValue(history.history, "val_loss") ?? null,
-    valAccuracy: lastHistoryValue(history.history, "val_acc", "val_accuracy") ?? null
+  const finalMetrics: AttentionModelMetadata["trainingMetrics"] = {
+    loss: lastNumericHistoryValue(history.history, "loss") ?? null,
+    accuracy: lastNumericHistoryValue(history.history, "acc", "accuracy") ?? null,
+    valLoss: lastNumericHistoryValue(history.history, "val_loss") ?? null,
+    valAccuracy: lastNumericHistoryValue(history.history, "val_acc", "val_accuracy") ?? null
   };
   const metadata: AttentionModelMetadata = {
     features: [...ADHD_MODEL_FEATURES],
