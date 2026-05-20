@@ -65,6 +65,22 @@ function lastHistoryValue(history: tfFallback.History["history"], ...keys: strin
   return undefined;
 }
 
+function lastNumericHistoryValue(history: tfFallback.History["history"], ...keys: string[]) {
+  const value = lastHistoryValue(history, ...keys);
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (value instanceof tfFallback.Tensor) {
+    const metric = value.dataSync()[0];
+    value.dispose();
+    return typeof metric === "number" && Number.isFinite(metric) ? metric : undefined;
+  }
+
+  return undefined;
+}
+
 async function loadTensorFlow(): Promise<TensorFlowModule> {
   try {
     const tfNode = (await dynamicImport("@tensorflow/tfjs-node")) as TensorFlowModule;
@@ -332,11 +348,11 @@ async function main() {
     }
   });
 
-  const finalMetrics = {
-    loss: lastHistoryValue(history.history, "loss") ?? null,
-    mae: lastHistoryValue(history.history, "mae") ?? null,
-    valLoss: lastHistoryValue(history.history, "val_loss") ?? null,
-    valMae: lastHistoryValue(history.history, "val_mae") ?? null
+  const finalMetrics: CognitivePerformanceModelMetadata["trainingMetrics"] = {
+    loss: lastNumericHistoryValue(history.history, "loss") ?? null,
+    mae: lastNumericHistoryValue(history.history, "mae") ?? null,
+    valLoss: lastNumericHistoryValue(history.history, "val_loss") ?? null,
+    valMae: lastNumericHistoryValue(history.history, "val_mae") ?? null
   };
   const metadata: CognitivePerformanceModelMetadata = {
     features: [...COGNITIVE_PERFORMANCE_MODEL_FEATURES],
