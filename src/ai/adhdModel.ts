@@ -130,6 +130,44 @@ async function loadAttentionWeights(model: LayersModel) {
   return attentionWeightsPromise;
 }
 
+function getModelInputSize(model: LayersModel) {
+  const [input] = model.inputs;
+  const shape = input?.shape;
+
+  if (!shape || shape.length === 0) {
+    return null;
+  }
+
+  const lastDimension = shape[shape.length - 1];
+  return typeof lastDimension === "number" ? lastDimension : null;
+}
+
+function isTensorOutput(value: unknown): value is Tensor {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value &&
+    typeof (value as Tensor).data === "function" &&
+    "dispose" in value &&
+    typeof (value as Tensor).dispose === "function"
+  );
+}
+
+function disposePredictionOutput(output: unknown) {
+  if (Array.isArray(output)) {
+    output.forEach((tensor) => tensor.dispose());
+    return;
+  }
+
+  if (output && typeof output === "object") {
+    Object.values(output).forEach((value) => {
+      if (isTensorOutput(value)) {
+        value.dispose();
+      }
+    });
+  }
+}
+
 export async function warmAttentionModel() {
   await Promise.all([loadAttentionModel(), loadAttentionMetadata()]);
 }
@@ -143,29 +181,41 @@ export async function predictAttentionRisk(metrics: MetricsSnapshot): Promise<At
   }
 
   const [model, metadata] = await Promise.all([loadAttentionModel(), loadAttentionMetadata()]);
+  const modelInputSize = model ? getModelInputSize(model) : null;
 
-  if (!model || !metadata || metadata.normalization.length !== featureVector.length) {
+  if (
+    !model ||
+    !metadata ||
+    metadata.normalization.length !== featureVector.length ||
+    (modelInputSize !== null && modelInputSize !== featureVector.length)
+  ) {
     return null;
   }
 
   const tf = await import("@tensorflow/tfjs");
   const normalizedFeatureVector = normalizeAttentionFeatureVector(featureVector, metadata.normalization);
   const input = tf.tensor2d([normalizedFeatureVector]);
-  const output = model.predict(input);
-
-  if (Array.isArray(output)) {
-    input.dispose();
-    output.forEach((tensor) => tensor.dispose());
-    return null;
-  }
-
-  const prediction = output as Tensor;
-  const scores = Array.from(await prediction.data());
-  const weights = await loadAttentionWeights(model);
+  let prediction: Tensor | null = null;
+  let scores: number[] = [];
+  let weights: number[] | null = null;
   const normalizedFeatures = toAttentionFeatureValueMap(normalizedFeatureVector);
 
-  input.dispose();
-  prediction.dispose();
+  try {
+    const output = model.predict(input);
+
+    if (!isTensorOutput(output)) {
+      disposePredictionOutput(output);
+      return null;
+    }
+
+    prediction = output;
+    [scores, weights] = await Promise.all([prediction.data().then((values) => Array.from(values)), loadAttentionWeights(model)]);
+  } catch {
+    return null;
+  } finally {
+    input.dispose();
+    prediction?.dispose();
+  }
 
   if (scores.length === 0) {
     return null;
