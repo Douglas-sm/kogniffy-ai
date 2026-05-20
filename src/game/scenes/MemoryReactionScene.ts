@@ -326,11 +326,6 @@ function drawButton(
     ctx.beginPath();
     ctx.roundRect(-rect.width / 2 + 4, -rect.height / 2 + 4, rect.width - 8, rect.height - 8, 15);
     ctx.fill();
-
-    ctx.fillStyle = hexToRgba("#ffffff", 0.05 + lightProgress * 0.18);
-    ctx.beginPath();
-    ctx.roundRect(-rect.width / 2 + 10, -rect.height / 2 + 8, rect.width - 20, 16, 8);
-    ctx.fill();
   }
 
   ctx.lineWidth = 2.5;
@@ -341,7 +336,7 @@ function drawButton(
   ctx.font = "900 26px Trebuchet MS, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(config.label, 0, -6);
+  ctx.fillText(config.label, 0, -2);
 
   ctx.font = "700 12px Trebuchet MS, sans-serif";
   ctx.fillStyle = "rgba(231, 244, 255, 0.7)";
