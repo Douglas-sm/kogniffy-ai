@@ -1,17 +1,12 @@
 import { predictAttentionRisk, warmAttentionModel } from "@/ai/adhdModel";
-import type { GameEngine, GameScene, Platform } from "@/game/engine/GameEngine";
+import type { GameEngine, GameScene, Platform, PointerPosition, Rect } from "@/game/engine/GameEngine";
+import { drawCaveBackground, drawPanelText, drawRoundedRect } from "@/game/scenes/sceneUtils";
 import type { AttentionRuleId } from "@/metrics/metricsCollector";
-import {
-  drawCaveBackground,
-  drawPanelText,
-  drawPlatform,
-  drawRoundedRect
-} from "@/game/scenes/sceneUtils";
 
 type CrystalColor = "blue" | "red" | "green" | "gold";
 type CrystalSize = "small" | "large";
 type DistractionKind = "stone" | "leaf" | "bat" | "drop" | "dust";
-type ScenePhase = "banner" | "playing" | "complete";
+type ScenePhase = "banner" | "playing" | "bridgeForming" | "portal";
 
 interface BaseFallingObject {
   id: number;
@@ -43,6 +38,26 @@ interface DistractionObject extends BaseFallingObject {
   distraction: DistractionKind;
 }
 
+interface ShatterPiece {
+  angle: number;
+  speed: number;
+  width: number;
+  height: number;
+  rotation: number;
+  spin: number;
+}
+
+interface ShatterEffect {
+  x: number;
+  y: number;
+  color: string;
+  outline: string;
+  bright: boolean;
+  ageMs: number;
+  durationMs: number;
+  pieces: ShatterPiece[];
+}
+
 type FallingObject = CrystalObject | DistractionObject;
 
 interface AttentionRule {
@@ -59,7 +74,32 @@ const ASSIST_DURATION_MS = 6_000;
 const RISK_SAMPLE_INTERVAL_MS = 1_500;
 const MIN_TARGETS_FOR_RISK_SAMPLE = 3;
 const MAX_SIMULTANEOUS_OBJECTS = 3;
-const FLOOR_Y = 432;
+const FLOOR_Y = 430;
+const BRIDGE_FORMATION_MS = 1_300;
+const SHATTER_DURATION_MS = 460;
+const GAMEPLAY_BRIDGE_MAX_PROGRESS = 0.72;
+const HITS_FOR_BRIDGE_PROGRESS = 8;
+const LEFT_LEDGE: Platform = { x: 0, y: 454, width: 220, height: 86 };
+const RIGHT_LEDGE: Platform = { x: 740, y: 454, width: 220, height: 86 };
+const BRIDGE_PLATFORM: Platform = { x: 204, y: 454, width: 552, height: 86 };
+const BRIDGE_SEGMENTS = Array.from({ length: 8 }, (_, index) => ({
+  x: BRIDGE_PLATFORM.x + index * 70,
+  y: BRIDGE_PLATFORM.y,
+  width: 62,
+  height: 86
+}));
+const PORTAL_ZONE: Rect = {
+  x: 818,
+  y: 326,
+  width: 92,
+  height: 128
+};
+const TARGET_CARD = {
+  x: 738,
+  y: 148,
+  width: 192,
+  height: 214
+};
 const RULES: AttentionRule[] = [
   {
     id: "blue",
@@ -87,63 +127,88 @@ const RULES: AttentionRule[] = [
   }
 ];
 
+function clonePlatform(platform: Platform): Platform {
+  return { ...platform };
+}
+
+function initialPlatforms() {
+  return [clonePlatform(LEFT_LEDGE), clonePlatform(RIGHT_LEDGE)];
+}
+
+function bridgePlatforms() {
+  return [clonePlatform(LEFT_LEDGE), clonePlatform(BRIDGE_PLATFORM), clonePlatform(RIGHT_LEDGE)];
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
 export class AttentionScene implements GameScene {
   id = "attention";
   title = "Caverna em tremor";
-  objective = "Colete apenas os cristais indicados pela regra atual";
+  objective = "Pegue os cristais para formar uma ponte até o outro lado";
   spawnSide = "left" as const;
   allowJump = false;
   exitMode = "portal" as const;
-  platforms: Platform[] = [{ x: 0, y: 454, width: 960, height: 86 }];
+  platforms: Platform[] = initialPlatforms();
 
-  private readonly lanes = [96, 216, 336, 456, 576, 696, 816];
+  private readonly lanes = [330, 430, 530, 630];
   private fallingObjects: FallingObject[] = [];
+  private shatterEffects: ShatterEffect[] = [];
   private nextId = 1;
   private phase: ScenePhase = "banner";
   private bannerRemainingMs = RULE_BANNER_MS;
   private nextSpawnInMs = 560;
   private activeElapsedMs = 0;
   private currentRuleIndex = 0;
-  private completed = false;
   private assistRemainingMs = 0;
   private correctHits = 0;
   private impulsiveErrors = 0;
   private omissions = 0;
   private distractionsCollected = 0;
+  private bridgeProgress = 0;
+  private bridgeFormationElapsedMs = 0;
+  private bridgeFormationStartProgress = 0;
   private lastRiskSampleAtMs = -RISK_SAMPLE_INTERVAL_MS;
   private riskPredictionPending = false;
 
   enter(engine: GameEngine) {
+    this.platforms = initialPlatforms();
     this.fallingObjects = [];
+    this.shatterEffects = [];
     this.nextId = 1;
     this.phase = "banner";
     this.bannerRemainingMs = RULE_BANNER_MS;
     this.nextSpawnInMs = 560;
     this.activeElapsedMs = 0;
     this.currentRuleIndex = 0;
-    this.completed = false;
     this.assistRemainingMs = 0;
     this.correctHits = 0;
     this.impulsiveErrors = 0;
     this.omissions = 0;
     this.distractionsCollected = 0;
+    this.bridgeProgress = 0;
+    this.bridgeFormationElapsedMs = 0;
+    this.bridgeFormationStartProgress = 0;
     this.lastRiskSampleAtMs = -RISK_SAMPLE_INTERVAL_MS;
     this.riskPredictionPending = false;
+    this.positionRobotAtLedge(engine);
     void warmAttentionModel();
     engine.metrics.startAttentionRule(this.currentRule.id, this.currentRule.label, 0);
     engine.dialogBox.setLines([
-      "A caverna começou a tremer e tudo está caindo do teto.",
-      "Mova o robô para a esquerda e para a direita e encoste apenas nos cristais que combinam com a regra do painel.",
+      "O robô vai esperar ao lado do abismo enquanto os cristais caem no centro da caverna.",
+      "Clique apenas nos cristais que combinam com o item mostrado no quadro da direita para formar a ponte.",
       "Ignore pedras, folhas, morcegos, gotas d'água e poeira."
     ]);
   }
 
   update(engine: GameEngine, dt: number) {
-    if (this.completed || engine.dialogBox.isActive) {
+    this.assistRemainingMs = Math.max(0, this.assistRemainingMs - dt * 1000);
+    this.updateShatterEffects(dt);
+
+    if (engine.dialogBox.isActive) {
       return;
     }
-
-    this.assistRemainingMs = Math.max(0, this.assistRemainingMs - dt * 1000);
 
     if (this.phase === "banner") {
       this.bannerRemainingMs = Math.max(0, this.bannerRemainingMs - dt * 1000);
@@ -156,10 +221,108 @@ export class AttentionScene implements GameScene {
       return;
     }
 
+    if (this.phase === "playing") {
+      this.updatePlayingPhase(engine, dt);
+      return;
+    }
+
+    if (this.phase === "bridgeForming") {
+      this.updateBridgeFormation(engine, dt);
+    }
+  }
+
+  draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
+    drawCaveBackground(ctx, engine.timeMs, "#365e6b");
+    this.drawCaveShell(ctx, engine.timeMs);
+    drawPanelText(ctx, "Ponte de cristal", this.headerLine(engine));
+    this.drawStatsCard(ctx);
+    this.drawTargetCard(ctx, engine.timeMs);
+
+    const shake = this.cameraOffset(engine.timeMs);
+
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
+    this.drawAbyss(ctx, engine.timeMs);
+    this.drawCliffLedges(ctx);
+    this.drawBridge(ctx, engine.timeMs);
+    this.drawCeiling(ctx, engine.timeMs);
+    this.drawRobotPerchGlow(ctx, engine.player.x, engine.player.y);
+
+    for (const fallingObject of this.fallingObjects) {
+      this.drawFallingObject(ctx, fallingObject, engine.timeMs);
+    }
+
+    for (const effect of this.shatterEffects) {
+      this.drawShatterEffect(ctx, effect);
+    }
+
+    ctx.restore();
+
+    if (this.phase === "banner") {
+      this.drawRuleBanner(ctx);
+    }
+
+    if (this.assistRemainingMs > 0 && this.phase === "playing") {
+      this.drawAssistBanner(ctx);
+    }
+  }
+
+  onClick(engine: GameEngine, pointer: PointerPosition) {
     if (this.phase !== "playing") {
       return;
     }
 
+    const clicked = this.findClickableObject(engine, pointer);
+
+    if (!clicked) {
+      return;
+    }
+
+    this.resolveClick(engine, clicked.id);
+  }
+
+  onAutoHelp(engine: GameEngine) {
+    if (this.phase !== "playing" && this.phase !== "banner") {
+      return;
+    }
+
+    this.assistRemainingMs = ASSIST_DURATION_MS;
+    engine.metrics.recordAttentionAutoHelp();
+  }
+
+  shouldShowAutoHelpDialog() {
+    return false;
+  }
+
+  getCameraOffset(engine: GameEngine) {
+    return this.cameraOffset(engine.timeMs);
+  }
+
+  getPortalZone() {
+    return PORTAL_ZONE;
+  }
+
+  isMovementEnabled(engine: GameEngine) {
+    return this.phase === "portal" && engine.isSceneExitReady();
+  }
+
+  getCanvasCursor(engine: GameEngine) {
+    if (engine.pointer.pointerType !== "mouse" || this.phase !== "playing") {
+      return "default";
+    }
+
+    return this.findClickableObject(engine, engine.pointer) ? "pointer" : "default";
+  }
+
+  private positionRobotAtLedge(engine: GameEngine) {
+    const x = LEFT_LEDGE.x + LEFT_LEDGE.width - engine.player.width - 24;
+    const y = LEFT_LEDGE.y - engine.player.height;
+    engine.player.setCheckpoint(x, y);
+    engine.player.reset(x, y);
+  }
+
+  private updatePlayingPhase(engine: GameEngine, dt: number) {
     const nextRuleBoundary = (this.currentRuleIndex + 1) * RULE_DURATION_MS;
     const nextElapsed = Math.min(ACTIVE_DURATION_MS, this.activeElapsedMs + dt * 1000);
 
@@ -178,7 +341,7 @@ export class AttentionScene implements GameScene {
     this.activeElapsedMs = nextElapsed;
 
     if (this.activeElapsedMs >= ACTIVE_DURATION_MS) {
-      this.finishPhase(engine);
+      this.startBridgeFormation(engine);
       return;
     }
 
@@ -193,71 +356,30 @@ export class AttentionScene implements GameScene {
     this.scheduleRiskSample(engine);
   }
 
-  draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
-    drawCaveBackground(ctx, engine.timeMs, "#365e6b");
-    this.drawCaveShell(ctx, engine.timeMs);
-    drawPanelText(
-      ctx,
-      "Cristais em queda",
-      this.completed
-        ? "O tremor diminuiu. Leve o robô até o portal no centro para seguir viagem."
-        : `Regra: ${this.currentRule.label} | Tempo: ${this.remainingSeconds()}s`
-    );
-    this.drawStatsCard(ctx);
-    this.drawRuleTag(ctx);
+  private updateBridgeFormation(engine: GameEngine, dt: number) {
+    this.bridgeFormationElapsedMs += dt * 1000;
+    const progress = clamp01(this.bridgeFormationElapsedMs / BRIDGE_FORMATION_MS);
+    const eased = 1 - (1 - progress) ** 3;
+    this.bridgeProgress = this.bridgeFormationStartProgress + (1 - this.bridgeFormationStartProgress) * eased;
 
-    const shake = this.cameraOffset(engine.timeMs);
-
-    ctx.save();
-    ctx.translate(shake.x, shake.y);
-
-    for (const platform of this.platforms) {
-      drawPlatform(ctx, platform);
-    }
-
-    this.drawCeiling(ctx, engine.timeMs);
-    this.drawCollectionGlow(ctx, engine.player.x, engine.player.y);
-
-    for (const fallingObject of this.fallingObjects) {
-      this.drawFallingObject(ctx, fallingObject, engine.timeMs);
-    }
-
-    ctx.restore();
-
-    if (this.phase === "banner" && !this.completed) {
-      this.drawRuleBanner(ctx);
-    }
-
-    if (this.assistRemainingMs > 0 && !this.completed) {
-      this.drawAssistBanner(ctx);
-    }
-  }
-
-  onAutoHelp(engine: GameEngine) {
-    if (this.completed) {
+    if (progress < 1) {
       return;
     }
 
-    this.assistRemainingMs = ASSIST_DURATION_MS;
-    engine.metrics.recordAttentionAutoHelp();
+    this.bridgeProgress = 1;
+    this.platforms = bridgePlatforms();
+    this.phase = "portal";
+    engine.completeScene();
   }
 
-  getCameraOffset(engine: GameEngine) {
-    return this.cameraOffset(engine.timeMs);
-  }
-
-  private finishPhase(engine: GameEngine) {
-    if (this.completed) {
-      return;
-    }
-
-    this.completed = true;
-    this.phase = "complete";
+  private startBridgeFormation(engine: GameEngine) {
+    this.phase = "bridgeForming";
     this.activeElapsedMs = ACTIVE_DURATION_MS;
     this.assistRemainingMs = 0;
     this.fallingObjects = [];
+    this.bridgeFormationElapsedMs = 0;
+    this.bridgeFormationStartProgress = this.bridgeProgress;
     engine.metrics.completeAttentionRule(ACTIVE_DURATION_MS);
-    engine.completeScene();
   }
 
   private spawnObject(engine: GameEngine) {
@@ -277,12 +399,6 @@ export class AttentionScene implements GameScene {
   }
 
   private updateFallingObjects(engine: GameEngine, dt: number) {
-    const collectZone = {
-      x: engine.player.x - 12,
-      y: engine.player.y - 10,
-      width: engine.player.width + 24,
-      height: engine.player.height + 20
-    };
     const keptObjects: FallingObject[] = [];
 
     for (const fallingObject of this.fallingObjects) {
@@ -295,11 +411,6 @@ export class AttentionScene implements GameScene {
           ? Math.sin(engine.timeMs / 70 + fallingObject.swayPhase) * 10
           : Math.sin(engine.timeMs / 210 + fallingObject.swayPhase) * fallingObject.swayAmplitude;
       fallingObject.x = fallingObject.baseX + flutter;
-
-      if (this.objectTouchesZone(fallingObject, collectZone)) {
-        this.resolveCollection(engine, fallingObject);
-        continue;
-      }
 
       if (fallingObject.y + fallingObject.height / 2 >= FLOOR_Y) {
         if (fallingObject.kind === "crystal" && fallingObject.isTarget) {
@@ -317,9 +428,27 @@ export class AttentionScene implements GameScene {
     this.fallingObjects = keptObjects;
   }
 
-  private resolveCollection(engine: GameEngine, fallingObject: FallingObject) {
+  private resolveClick(engine: GameEngine, objectId: number) {
+    const clickedIndex = this.fallingObjects.findIndex((fallingObject) => fallingObject.id === objectId);
+
+    if (clickedIndex < 0) {
+      return;
+    }
+
+    const [fallingObject] = this.fallingObjects.splice(clickedIndex, 1);
+
+    if (!fallingObject) {
+      return;
+    }
+
+    this.spawnShatterEffect(fallingObject);
+
     if (fallingObject.kind === "crystal" && fallingObject.isTarget) {
       this.correctHits += 1;
+      this.bridgeProgress = Math.max(
+        this.bridgeProgress,
+        Math.min(GAMEPLAY_BRIDGE_MAX_PROGRESS, (this.correctHits / HITS_FOR_BRIDGE_PROGRESS) * GAMEPLAY_BRIDGE_MAX_PROGRESS)
+      );
       engine.clearErrorStreak(this.id);
       engine.metrics.recordAttentionCorrectHit(this.activeElapsedMs, performance.now() - fallingObject.createdAt);
       return;
@@ -335,6 +464,45 @@ export class AttentionScene implements GameScene {
     }
 
     engine.registerError(this.id);
+  }
+
+  private spawnShatterEffect(fallingObject: FallingObject) {
+    const color = this.objectColor(fallingObject);
+    const bright = fallingObject.kind === "crystal" ? fallingObject.bright : fallingObject.distraction === "drop";
+    const pieceCount = fallingObject.kind === "crystal" ? 8 : 6;
+    const pieces = Array.from({ length: pieceCount }, () => ({
+      angle: Math.random() * Math.PI * 2,
+      speed: 30 + Math.random() * 80,
+      width: 6 + Math.random() * 8,
+      height: 6 + Math.random() * 10,
+      rotation: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 0.42
+    }));
+
+    this.shatterEffects.push({
+      x: fallingObject.x,
+      y: fallingObject.y,
+      color,
+      outline: "#173b4f",
+      bright,
+      ageMs: 0,
+      durationMs: SHATTER_DURATION_MS,
+      pieces
+    });
+  }
+
+  private updateShatterEffects(dt: number) {
+    const nextEffects: ShatterEffect[] = [];
+
+    for (const effect of this.shatterEffects) {
+      effect.ageMs += dt * 1000;
+
+      if (effect.ageMs < effect.durationMs) {
+        nextEffects.push(effect);
+      }
+    }
+
+    this.shatterEffects = nextEffects;
   }
 
   private scheduleRiskSample(engine: GameEngine) {
@@ -547,13 +715,122 @@ export class AttentionScene implements GameScene {
     return Math.max(0, Math.ceil((ACTIVE_DURATION_MS - this.activeElapsedMs) / 1000));
   }
 
-  private objectTouchesZone(fallingObject: FallingObject, zone: { x: number; y: number; width: number; height: number }) {
+  private findClickableObject(engine: GameEngine, pointer: PointerPosition) {
+    const scenePointer = this.pointerInScene(pointer, engine.timeMs);
+
+    for (let index = this.fallingObjects.length - 1; index >= 0; index -= 1) {
+      const fallingObject = this.fallingObjects[index]!;
+
+      if (this.objectContainsPoint(fallingObject, scenePointer)) {
+        return fallingObject;
+      }
+    }
+
+    return null;
+  }
+
+  private pointerInScene(pointer: PointerPosition, timeMs: number) {
+    const shake = this.cameraOffset(timeMs);
+    return {
+      x: pointer.x - shake.x,
+      y: pointer.y - shake.y
+    };
+  }
+
+  private objectContainsPoint(fallingObject: FallingObject, point: PointerPosition) {
     return (
-      fallingObject.x + fallingObject.width / 2 > zone.x &&
-      fallingObject.x - fallingObject.width / 2 < zone.x + zone.width &&
-      fallingObject.y + fallingObject.height / 2 > zone.y &&
-      fallingObject.y - fallingObject.height / 2 < zone.y + zone.height
+      point.x >= fallingObject.x - fallingObject.width / 2 - 6 &&
+      point.x <= fallingObject.x + fallingObject.width / 2 + 6 &&
+      point.y >= fallingObject.y - fallingObject.height / 2 - 6 &&
+      point.y <= fallingObject.y + fallingObject.height / 2 + 6
     );
+  }
+
+  private headerLine(engine: GameEngine) {
+    if (this.phase === "bridgeForming") {
+      return "Os cristais estão se encaixando. Aguarde a ponte terminar de surgir.";
+    }
+
+    if (this.phase === "portal") {
+      return engine.isSceneExitReady()
+        ? "A ponte de cristal ficou pronta. Use as setas e siga até o portal à direita."
+        : "A ponte ficou pronta. O portal está aparecendo no outro lado.";
+    }
+
+    return `Regra: ${this.currentRule.label} | Tempo: ${this.remainingSeconds()}s`;
+  }
+
+  private rulePreviewCrystal(): CrystalObject {
+    const previewByRule: Record<
+      AttentionRuleId,
+      Pick<CrystalObject, "color" | "size" | "bright">
+    > = {
+      blue: { color: "blue", size: "large", bright: false },
+      small: { color: "green", size: "small", bright: false },
+      red: { color: "red", size: "large", bright: false },
+      bright: { color: "gold", size: "large", bright: true }
+    };
+    const preview = previewByRule[this.currentRule.id];
+    const dimensions = preview.size === "small" ? { width: 28, height: 34 } : { width: 40, height: 50 };
+
+    return {
+      id: 10_000 + this.currentRuleIndex,
+      kind: "crystal",
+      x: 0,
+      y: 0,
+      baseX: 0,
+      speed: 0,
+      createdAt: 0,
+      width: dimensions.width,
+      height: dimensions.height,
+      swayPhase: 0,
+      swayAmplitude: 0,
+      horizontalDrift: 0,
+      rotation: 0,
+      spin: 0,
+      isTarget: true,
+      ...preview
+    };
+  }
+
+  private objectColor(fallingObject: FallingObject) {
+    if (fallingObject.kind === "crystal") {
+      return this.crystalFill(fallingObject.color);
+    }
+
+    if (fallingObject.distraction === "stone") {
+      return "#96a9b4";
+    }
+
+    if (fallingObject.distraction === "leaf") {
+      return "#8fd07d";
+    }
+
+    if (fallingObject.distraction === "bat") {
+      return "#826392";
+    }
+
+    if (fallingObject.distraction === "drop") {
+      return "#79d8ff";
+    }
+
+    return "#fff9e9";
+  }
+
+  private crystalFill(color: CrystalColor) {
+    if (color === "blue") {
+      return "#4aa8ff";
+    }
+
+    if (color === "red") {
+      return "#ff6f6b";
+    }
+
+    if (color === "green") {
+      return "#71d18c";
+    }
+
+    return "#ffd76a";
   }
 
   private drawCaveShell(ctx: CanvasRenderingContext2D, timeMs: number) {
@@ -582,6 +859,130 @@ export class AttentionScene implements GameScene {
       ctx.closePath();
       ctx.fill();
     }
+  }
+
+  private drawAbyss(ctx: CanvasRenderingContext2D, timeMs: number) {
+    const gradient = ctx.createLinearGradient(0, 364, 0, 540);
+    gradient.addColorStop(0, "rgba(8, 20, 26, 0.3)");
+    gradient.addColorStop(0.28, "rgba(7, 18, 24, 0.84)");
+    gradient.addColorStop(1, "rgba(4, 10, 14, 0.98)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(188, 454);
+    ctx.lineTo(248, 328);
+    ctx.lineTo(718, 328);
+    ctx.lineTo(772, 454);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(111, 214, 197, 0.16)";
+    for (let index = 0; index < 8; index += 1) {
+      const x = 250 + index * 64;
+      const y = 390 + Math.sin(timeMs / 240 + index) * 16;
+      const radius = 8 + (index % 3) * 4;
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawCliffLedges(ctx: CanvasRenderingContext2D) {
+    this.drawCliffPlatform(ctx, LEFT_LEDGE, "#2b4b59", "#5f7f8d");
+    this.drawCliffPlatform(ctx, RIGHT_LEDGE, "#2e5362", "#668aa0");
+  }
+
+  private drawCliffPlatform(ctx: CanvasRenderingContext2D, platform: Platform, faceColor: string, edgeColor: string) {
+    ctx.fillStyle = faceColor;
+    ctx.beginPath();
+    ctx.moveTo(platform.x, platform.y);
+    ctx.lineTo(platform.x + platform.width, platform.y);
+    ctx.lineTo(platform.x + platform.width, platform.y + platform.height);
+    ctx.lineTo(platform.x, platform.y + platform.height);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = edgeColor;
+    ctx.beginPath();
+    ctx.moveTo(platform.x, platform.y);
+    ctx.lineTo(platform.x + platform.width, platform.y);
+    ctx.lineTo(platform.x + platform.width - 18, platform.y + 18);
+    ctx.lineTo(platform.x + 16, platform.y + 18);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#173b4f";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(platform.x + 2, platform.y + 2, platform.width - 4, platform.height - 4);
+  }
+
+  private drawBridge(ctx: CanvasRenderingContext2D, timeMs: number) {
+    const builtUnits = this.bridgeProgress * BRIDGE_SEGMENTS.length;
+
+    for (let index = 0; index < BRIDGE_SEGMENTS.length; index += 1) {
+      const segment = BRIDGE_SEGMENTS[index]!;
+      const fillRatio = clamp01(builtUnits - index);
+
+      if (fillRatio <= 0) {
+        continue;
+      }
+
+      this.drawBridgeSegment(ctx, segment, fillRatio, timeMs, index);
+    }
+  }
+
+  private drawBridgeSegment(
+    ctx: CanvasRenderingContext2D,
+    segment: { x: number; y: number; width: number; height: number },
+    fillRatio: number,
+    timeMs: number,
+    index: number
+  ) {
+    const renderWidth = Math.max(6, segment.width * fillRatio);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(segment.x, segment.y - 4, renderWidth, segment.height + 6);
+    ctx.clip();
+
+    ctx.fillStyle = "#71d8ff";
+    ctx.beginPath();
+    ctx.moveTo(segment.x, segment.y);
+    ctx.lineTo(segment.x + segment.width * 0.18, segment.y - 12);
+    ctx.lineTo(segment.x + segment.width * 0.5, segment.y - 4);
+    ctx.lineTo(segment.x + segment.width * 0.82, segment.y - 16);
+    ctx.lineTo(segment.x + segment.width, segment.y);
+    ctx.lineTo(segment.x + segment.width - 6, segment.y + 42);
+    ctx.lineTo(segment.x + segment.width * 0.74, segment.y + 78);
+    ctx.lineTo(segment.x + segment.width * 0.24, segment.y + 70);
+    ctx.lineTo(segment.x + 6, segment.y + 30);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#173b4f";
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 249, 233, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(segment.x + segment.width * 0.24, segment.y + 8);
+    ctx.lineTo(segment.x + segment.width * 0.44, segment.y + 54);
+    ctx.lineTo(segment.x + segment.width * 0.66, segment.y + 14);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 249, 233, 0.2)";
+    ctx.beginPath();
+    ctx.arc(
+      segment.x + segment.width * 0.52,
+      segment.y + 20,
+      12 + Math.sin(timeMs / 160 + index) * 2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
   }
 
   private drawCeiling(ctx: CanvasRenderingContext2D, timeMs: number) {
@@ -623,19 +1024,46 @@ export class AttentionScene implements GameScene {
     });
   }
 
-  private drawRuleTag(ctx: CanvasRenderingContext2D) {
-    drawRoundedRect(ctx, 582, 34, 108, 30, 15);
-    ctx.fillStyle = this.currentRule.accent;
+  private drawTargetCard(ctx: CanvasRenderingContext2D, timeMs: number) {
+    drawRoundedRect(ctx, TARGET_CARD.x, TARGET_CARD.y, TARGET_CARD.width, TARGET_CARD.height, 22);
+    ctx.fillStyle = "rgba(255, 249, 233, 0.94)";
     ctx.fill();
+    ctx.strokeStyle = this.currentRule.accent;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
     ctx.fillStyle = "#173b4f";
-    ctx.font = "900 13px Trebuchet MS, sans-serif";
+    ctx.font = "900 16px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(this.currentRule.shortLabel, 636, 49);
+    ctx.textBaseline = "top";
+    ctx.fillText("Item alvo", TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 18);
+
+    drawRoundedRect(ctx, TARGET_CARD.x + 34, TARGET_CARD.y + 52, 124, 124, 22);
+    ctx.fillStyle = "rgba(23, 59, 79, 0.08)";
+    ctx.fill();
+    ctx.strokeStyle = "#173b4f";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const preview = this.rulePreviewCrystal();
+    ctx.save();
+    ctx.translate(TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 114);
+    ctx.scale(1.8, 1.8);
+    this.drawCrystal(ctx, preview, timeMs);
+    ctx.restore();
+
+    ctx.fillStyle = "#173b4f";
+    ctx.font = "900 15px Trebuchet MS, sans-serif";
+    ctx.fillText(this.currentRule.shortLabel, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 186);
+
+    const progressPercent = Math.round(this.bridgeProgress * 100);
+    ctx.font = "800 13px Trebuchet MS, sans-serif";
+    ctx.fillStyle = "#426171";
+    ctx.fillText(`Ponte: ${progressPercent}%`, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 208);
   }
 
   private drawRuleBanner(ctx: CanvasRenderingContext2D) {
-    drawRoundedRect(ctx, 212, 150, 536, 118, 24);
+    drawRoundedRect(ctx, 206, 150, 548, 124, 24);
     ctx.fillStyle = "rgba(9, 28, 36, 0.9)";
     ctx.fill();
     ctx.lineWidth = 5;
@@ -646,13 +1074,13 @@ export class AttentionScene implements GameScene {
     ctx.font = "900 18px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Nova regra", 480, 182);
+    ctx.fillText("Novo alvo", 480, 184);
     ctx.font = "900 28px Trebuchet MS, sans-serif";
-    ctx.fillText(this.currentRule.label, 480, 220);
+    ctx.fillText(this.currentRule.label, 480, 224);
   }
 
   private drawAssistBanner(ctx: CanvasRenderingContext2D) {
-    drawRoundedRect(ctx, 300, 484, 360, 34, 15);
+    drawRoundedRect(ctx, 286, 484, 388, 34, 15);
     ctx.fillStyle = "rgba(255, 215, 106, 0.94)";
     ctx.fill();
     ctx.fillStyle = "#173b4f";
@@ -662,8 +1090,8 @@ export class AttentionScene implements GameScene {
     ctx.fillText("Ajuda Kog ativa: os cristais corretos estão destacados.", 480, 501);
   }
 
-  private drawCollectionGlow(ctx: CanvasRenderingContext2D, playerX: number, playerY: number) {
-    ctx.fillStyle = this.assistRemainingMs > 0 ? "rgba(255, 215, 106, 0.18)" : "rgba(111, 214, 197, 0.11)";
+  private drawRobotPerchGlow(ctx: CanvasRenderingContext2D, playerX: number, playerY: number) {
+    ctx.fillStyle = "rgba(111, 214, 197, 0.12)";
     ctx.beginPath();
     ctx.ellipse(playerX + 21, playerY + 30, 34, 12, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -695,14 +1123,7 @@ export class AttentionScene implements GameScene {
       ctx.fill();
     }
 
-    ctx.fillStyle =
-      crystal.color === "blue"
-        ? "#4aa8ff"
-        : crystal.color === "red"
-          ? "#ff6f6b"
-          : crystal.color === "green"
-            ? "#71d18c"
-            : "#ffd76a";
+    ctx.fillStyle = this.crystalFill(crystal.color);
     ctx.beginPath();
     ctx.moveTo(0, -crystal.height / 2);
     ctx.lineTo(crystal.width / 2, -2);
@@ -804,6 +1225,45 @@ export class AttentionScene implements GameScene {
     }
   }
 
+  private drawShatterEffect(ctx: CanvasRenderingContext2D, effect: ShatterEffect) {
+    const progress = clamp01(effect.ageMs / effect.durationMs);
+    const fade = 1 - progress;
+
+    ctx.save();
+    ctx.globalAlpha = fade;
+
+    if (effect.bright) {
+      ctx.fillStyle = "rgba(255, 249, 233, 0.4)";
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, 24 * fade, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const piece of effect.pieces) {
+      const distance = piece.speed * progress;
+      const x = effect.x + Math.cos(piece.angle) * distance;
+      const y = effect.y + Math.sin(piece.angle) * distance + progress * progress * 18;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(piece.rotation + piece.spin * effect.ageMs * 0.01);
+      ctx.fillStyle = effect.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -piece.height / 2);
+      ctx.lineTo(piece.width / 2, 0);
+      ctx.lineTo(0, piece.height / 2);
+      ctx.lineTo(-piece.width / 2, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = effect.outline;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
   private cameraOffset(timeMs: number) {
     const progress = this.activeElapsedMs / ACTIVE_DURATION_MS;
     let intensity = 0.8 + progress * 5.2;
@@ -812,12 +1272,16 @@ export class AttentionScene implements GameScene {
       intensity *= 0.55;
     }
 
-    if (this.assistRemainingMs > 0) {
-      intensity *= 0.35;
+    if (this.phase === "bridgeForming") {
+      intensity *= 0.18;
     }
 
-    if (this.completed) {
-      intensity *= 0.25;
+    if (this.phase === "portal") {
+      intensity *= 0.1;
+    }
+
+    if (this.assistRemainingMs > 0) {
+      intensity *= 0.35;
     }
 
     return {
