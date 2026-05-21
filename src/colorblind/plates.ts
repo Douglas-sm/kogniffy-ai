@@ -42,6 +42,11 @@ type DifficultyConfig = {
   minGap: number;
   outerPadding: number;
   scale: number;
+  activationThreshold: number;
+  edgeLow: number;
+  edgeHigh: number;
+  coverageReach: number;
+  sharedDotChance: number;
 };
 
 type PaletteConfig = {
@@ -60,6 +65,12 @@ type PackedDot = {
   x: number;
   y: number;
   radius: number;
+};
+
+type DigitMask = {
+  width: number;
+  height: number;
+  alpha: number[][];
 };
 
 const DIGITS = "0123456789".split("");
@@ -324,72 +335,311 @@ const GLYPH_STROKES: Record<string, Stroke[]> = {
   ]
 };
 
+const DIGIT_MASK_VALUES: Record<string, number> = {
+  " ": 0,
+  ".": 0.12,
+  ":": 0.34,
+  "*": 0.66,
+  "#": 1
+};
+
+function createDigitMask(template: string): DigitMask {
+  const rows = template
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => {
+      const markerIndex = line.indexOf("|");
+      return (markerIndex >= 0 ? line.slice(markerIndex + 1) : line).replace(/\r/g, "");
+    });
+  const width = rows.reduce((maxWidth, row) => Math.max(maxWidth, row.length), 0);
+  const alpha = rows.map((row) =>
+    row
+      .padEnd(width, " ")
+      .split("")
+      .map((char) => DIGIT_MASK_VALUES[char] ?? 0)
+  );
+
+  return {
+    width,
+    height: rows.length,
+    alpha
+  };
+}
+
+const DIGIT_MASKS: Record<string, DigitMask> = {
+  "0": createDigitMask(`
+    |    .::.    
+    |  :*####*:  
+    | :########: 
+    | *###::###* 
+    |:###....###:
+    |*##:    :##*
+    |###      ###
+    |###      ###
+    |###      ###
+    |###      ###
+    |###      ###
+    |###      ###
+    |*##:    :##*
+    |:###....###:
+    | *###::###* 
+    | :########: 
+    |  :*####*:  
+    |    .::.    
+  `),
+  "1": createDigitMask(`
+    |     .::     
+    |    :*##     
+    |   :####     
+    |  .#####     
+    |    ###:     
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |    ###      
+    |   :###:     
+    |  :*####*.   
+    | :########:  
+    |   ......    
+  `),
+  "2": createDigitMask(`
+    |   .::::.    
+    |  :*####*:   
+    | :########:  
+    | *###::###*  
+    | .:.   :###: 
+    |       *##*  
+    |      :###.  
+    |     :###:   
+    |    :###:    
+    |   :###:     
+    |  :###:      
+    | :###.       
+    | *##*        
+    |:###::::::.  
+    |*##########: 
+    |###########* 
+    |:##########: 
+    |  ::::::::   
+  `),
+  "3": createDigitMask(`
+    |   .::::.    
+    |  :*####*:   
+    | :########:  
+    | *###::###*  
+    | .::.  :###: 
+    |       *##*  
+    |    .:*###:  
+    |    :#####.  
+    |    .:*###:  
+    |       *##*  
+    |       *##*  
+    | .::.  :###: 
+    | *###::###*  
+    | :########:  
+    |  :*####*:   
+    |    ::::     
+  `),
+  "4": createDigitMask(`
+    |      ###    
+    |     *###    
+    |    :####    
+    |   :##*##    
+    |  .### ###   
+    |  ###: ###   
+    | :###  ###   
+    | *##*  ###   
+    |:########### 
+    |############ 
+    |###########: 
+    |       ###   
+    |       ###   
+    |       ###   
+    |      :###:  
+    |      :###:  
+  `),
+  "5": createDigitMask(`
+    |  ::::::::   
+    | :########:  
+    | *########*  
+    | ###:        
+    | ###         
+    | ###:::::.   
+    | #########:  
+    | ##########: 
+    | ::::..*###* 
+    |        :###:
+    |         ###*
+    | .::.  .###* 
+    | *###::###*: 
+    | :########:  
+    |  :*####*:   
+    |    .::.     
+  `),
+  "6": createDigitMask(`
+    |    .:::.    
+    |   :*###*:   
+    |  :#######:  
+    | .###*::.    
+    | :##*        
+    | ###         
+    |###:::::.    
+    |#########:   
+    |##########:  
+    |###:  :###*  
+    |###    *###  
+    |###    *###  
+    |*##:  :###*  
+    |:###::###*:  
+    | :########:  
+    |  :*####*:   
+    |    .::.     
+  `),
+  "7": createDigitMask(`
+    |:###########: 
+    |############* 
+    |###########*  
+    |.......:###:  
+    |      .###*   
+    |      *###    
+    |     :###:    
+    |     ###*     
+    |    *###      
+    |   :###:      
+    |   ###*       
+    |  *###        
+    | .###:        
+    | :###         
+    | ###          
+    |:##*          
+  `),
+  "8": createDigitMask(`
+    |    .:::.    
+    |  :*####*:   
+    | :########:  
+    | *###::###*  
+    |:###....###: 
+    |*##*    *##* 
+    |:###....###: 
+    | *###::###*  
+    |  :######:   
+    | *###::###*  
+    |:###....###: 
+    |###      ### 
+    |###      ### 
+    |*##*    *##* 
+    |:###....###: 
+    | *########*  
+    |  :*####*:   
+    |    .:::.    
+  `),
+  "9": createDigitMask(`
+    |    .:::.    
+    |  :*####*:   
+    | :########:  
+    | *###::###*  
+    |:###....###: 
+    |*##*    *##* 
+    |###      ### 
+    |###      ### 
+    |*###:  :#### 
+    |:########### 
+    |  :######### 
+    |       :###* 
+    |        ###: 
+    |    ..:###   
+    | .:*#####:   
+    | :######*.   
+    |  .::::      
+  `)
+};
+
 const DIFFICULTY_CONFIG: Record<ColorDifficulty, DifficultyConfig> = {
   medium: {
-    dotCount: 620,
-    maxRotation: 0.045,
-    maxOffset: 0.9,
-    swapChance: 0.01,
-    edgeDropChance: 0.015,
-    edgeLeakChance: 0.01,
-    speckleChance: 0.002,
-    minDotRadius: 0.024,
-    maxDotRadius: 0.057,
-    minGap: 0.0065,
-    outerPadding: 0.02,
-    scale: 3.15
+    dotCount: 760,
+    maxRotation: 0.04,
+    maxOffset: 0.75,
+    swapChance: 0.008,
+    edgeDropChance: 0.012,
+    edgeLeakChance: 0.008,
+    speckleChance: 0.0014,
+    minDotRadius: 0.018,
+    maxDotRadius: 0.045,
+    minGap: 0.0048,
+    outerPadding: 0.018,
+    scale: 2.95,
+    activationThreshold: 0.52,
+    edgeLow: 0.18,
+    edgeHigh: 0.82,
+    coverageReach: 0.78,
+    sharedDotChance: 0.1
   },
   hard: {
-    dotCount: 680,
-    maxRotation: 0.07,
-    maxOffset: 1.15,
-    swapChance: 0.018,
-    edgeDropChance: 0.028,
-    edgeLeakChance: 0.018,
-    speckleChance: 0.003,
-    minDotRadius: 0.022,
-    maxDotRadius: 0.052,
-    minGap: 0.0056,
-    outerPadding: 0.018,
-    scale: 3
+    dotCount: 840,
+    maxRotation: 0.055,
+    maxOffset: 0.92,
+    swapChance: 0.012,
+    edgeDropChance: 0.018,
+    edgeLeakChance: 0.012,
+    speckleChance: 0.0018,
+    minDotRadius: 0.017,
+    maxDotRadius: 0.041,
+    minGap: 0.0043,
+    outerPadding: 0.017,
+    scale: 2.83,
+    activationThreshold: 0.54,
+    edgeLow: 0.2,
+    edgeHigh: 0.8,
+    coverageReach: 0.76,
+    sharedDotChance: 0.095
   },
   expert: {
-    dotCount: 740,
-    maxRotation: 0.095,
-    maxOffset: 1.35,
-    swapChance: 0.028,
-    edgeDropChance: 0.04,
-    edgeLeakChance: 0.028,
-    speckleChance: 0.004,
-    minDotRadius: 0.02,
-    maxDotRadius: 0.048,
-    minGap: 0.0048,
+    dotCount: 920,
+    maxRotation: 0.075,
+    maxOffset: 1.08,
+    swapChance: 0.017,
+    edgeDropChance: 0.024,
+    edgeLeakChance: 0.017,
+    speckleChance: 0.0022,
+    minDotRadius: 0.016,
+    maxDotRadius: 0.038,
+    minGap: 0.0038,
     outerPadding: 0.016,
-    scale: 2.85
+    scale: 2.72,
+    activationThreshold: 0.56,
+    edgeLow: 0.22,
+    edgeHigh: 0.78,
+    coverageReach: 0.74,
+    sharedDotChance: 0.09
   }
 };
 
 const PALETTES: Record<ColorPlateType, PaletteConfig> = {
   redGreen: {
-    backgroundColor: "#f6ecd7",
-    borderColor: "#d3c6ac",
-    backgroundDots: ["#92a688", "#a0b27b", "#b7b16b", "#98b094", "#c2bc7a", "#7ea49a"],
-    hiddenDots: ["#d18469", "#de9774", "#cb766d", "#c98286", "#e0a285", "#c46860"],
-    sharedDots: ["#d6c292", "#bba783", "#9cac8b", "#e3d4b5"]
+    backgroundColor: "#fbf8ef",
+    borderColor: "#d9d0bd",
+    backgroundDots: ["#7f9641", "#6f8e33", "#8ca24d", "#93a95a", "#83984a", "#7b9257"],
+    hiddenDots: ["#d38768", "#db9b79", "#cf7b62", "#de9175", "#c96d58", "#d98b6f"],
+    sharedDots: ["#e8dfcd", "#cfd6b0", "#d9caa8", "#d5dcc8"]
   },
   blueYellow: {
-    backgroundColor: "#f6ecd7",
-    borderColor: "#d3c6ac",
-    backgroundDots: ["#79a4b1", "#87b1b7", "#97b8aa", "#6e9db1", "#a8b98d", "#82a99d"],
-    hiddenDots: ["#c9a25c", "#ddb86d", "#c59d4f", "#e0bc7c", "#b99152", "#d2ad63"],
-    sharedDots: ["#d8ca9e", "#aac09f", "#a5b8b7", "#e2d7b9"]
+    backgroundColor: "#fbf8ef",
+    borderColor: "#d9d0bd",
+    backgroundDots: ["#6b9aaa", "#76a7b4", "#89b1b4", "#7c9fa9", "#8fb4a9", "#7198a7"],
+    hiddenDots: ["#c39b53", "#d6b36c", "#b98d45", "#d8ad62", "#c8a15b", "#ddb872"],
+    sharedDots: ["#e7dfcc", "#b9cbc3", "#c8d5d7", "#dcd2ba"]
   },
   lowContrast: {
-    backgroundColor: "#f6ecd7",
-    borderColor: "#d3c6ac",
-    backgroundDots: ["#a3b57c", "#b0bb85", "#c2bf8b", "#9cb07b", "#b4bf92", "#cabf95"],
-    hiddenDots: ["#bca56f", "#c9ae7a", "#a89d75", "#d0ba88", "#b69d71", "#c6b483"],
-    sharedDots: ["#d9cfad", "#b9c39b", "#c7b28b", "#e4dbc3"]
+    backgroundColor: "#fbf8ef",
+    borderColor: "#d9d0bd",
+    backgroundDots: ["#98a96f", "#a4b47a", "#aeb784", "#96a86e", "#b2bc8d", "#a1b07a"],
+    hiddenDots: ["#bea06f", "#c6ac79", "#b59667", "#ccb183", "#c2a573", "#b99969"],
+    sharedDots: ["#e8dfcf", "#c8cfb0", "#d7c8aa", "#dde0d1"]
   }
 };
 
@@ -537,14 +787,36 @@ function plateDifficultyConfig(trial: ColorTrialSpec) {
 
   return {
     ...base,
-    maxRotation: base.maxRotation * 0.55,
-    maxOffset: base.maxOffset * 0.65,
-    swapChance: base.swapChance * 0.4,
-    edgeDropChance: base.edgeDropChance * 0.45,
-    edgeLeakChance: base.edgeLeakChance * 0.45,
-    speckleChance: base.speckleChance * 0.35,
-    scale: base.scale * 1.18
+    maxRotation: base.maxRotation * 0.45,
+    maxOffset: base.maxOffset * 0.4,
+    swapChance: base.swapChance * 0.25,
+    edgeDropChance: base.edgeDropChance * 0.35,
+    edgeLeakChance: base.edgeLeakChance * 0.25,
+    speckleChance: base.speckleChance * 0.2,
+    scale: base.scale * 1.04,
+    activationThreshold: Math.min(0.64, base.activationThreshold + 0.055),
+    edgeLow: Math.max(0.12, base.edgeLow - 0.04),
+    edgeHigh: Math.max(base.edgeLow + 0.2, base.edgeHigh - 0.08),
+    coverageReach: Math.max(0.66, base.coverageReach - 0.06),
+    sharedDotChance: Math.max(0.045, base.sharedDotChance * 0.58)
   };
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep(min: number, max: number, value: number) {
+  if (value <= min) {
+    return 0;
+  }
+
+  if (value >= max) {
+    return 1;
+  }
+
+  const t = (value - min) / (max - min);
+  return t * t * (3 - 2 * t);
 }
 
 function pointToSegmentDistanceSquared(
@@ -604,9 +876,78 @@ function glyphCoverage(strokes: Stroke[], x: number, y: number, thickness: numbe
   return covered / totalWeight;
 }
 
+function sampleDigitMask(mask: DigitMask, x: number, y: number) {
+  if (x <= 0 || x >= 1 || y <= 0 || y >= 1) {
+    return 0;
+  }
+
+  const sampleX = x * (mask.width - 1);
+  const sampleY = y * (mask.height - 1);
+  const left = Math.floor(sampleX);
+  const top = Math.floor(sampleY);
+  const right = Math.min(mask.width - 1, left + 1);
+  const bottom = Math.min(mask.height - 1, top + 1);
+  const lerpX = sampleX - left;
+  const lerpY = sampleY - top;
+  const topLeft = mask.alpha[top]?.[left] ?? 0;
+  const topRight = mask.alpha[top]?.[right] ?? 0;
+  const bottomLeft = mask.alpha[bottom]?.[left] ?? 0;
+  const bottomRight = mask.alpha[bottom]?.[right] ?? 0;
+  const topValue = topLeft + (topRight - topLeft) * lerpX;
+  const bottomValue = bottomLeft + (bottomRight - bottomLeft) * lerpX;
+  const blended = topValue + (bottomValue - topValue) * lerpY;
+
+  return smoothstep(0.08, 0.88, blended);
+}
+
+function buildDigitGlyphSampler(trial: ColorTrialSpec, config: DifficultyConfig): GlyphSampler {
+  const mask = DIGIT_MASKS[trial.hidden];
+  const random = createSeededRandom(trial.seed + 211);
+  const rotation = (random() * 2 - 1) * config.maxRotation;
+  const offsetX = (random() * 2 - 1) * config.maxOffset;
+  const offsetY = (random() * 2 - 1) * config.maxOffset * 0.56;
+  const skew = (random() * 2 - 1) * 0.06;
+  const warpFrequency = 1.35 + random() * 0.35;
+  const warpPhase = random() * Math.PI * 2;
+  const warpX = 0.012 + random() * 0.01;
+  const warpY = 0.008 + random() * 0.006;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const centerX = 14 + offsetX;
+  const centerY = 14.16 + offsetY + (trial.hidden === "7" ? 0.16 : 0);
+  const widthBias = trial.hidden === "1" ? 5.45 : trial.hidden === "7" ? 5.3 : 5.35;
+  const heightBias = trial.hidden === "1" ? 7.25 : trial.hidden === "4" ? 6.95 : 7.15;
+  const glyphWidth = config.scale * widthBias;
+  const glyphHeight = config.scale * heightBias;
+
+  return {
+    coverageAt: (x: number, y: number) => {
+      const sourceXBase = 14 + x * 14;
+      const sourceYBase = 14 + y * 14;
+      const localX = sourceXBase - centerX;
+      const localY = sourceYBase - centerY;
+      const rotatedX = localX * cos + localY * sin;
+      const rotatedY = -localX * sin + localY * cos;
+      let sourceX = rotatedX / glyphWidth + 0.5;
+      let sourceY = rotatedY / glyphHeight + 0.5;
+
+      sourceX += (sourceY - 0.5) * skew;
+      sourceX += Math.sin((sourceY * warpFrequency + warpPhase) * Math.PI) * warpX;
+      sourceY += Math.sin((sourceX * 1.8 + warpPhase * 0.5) * Math.PI) * warpY;
+
+      return sampleDigitMask(mask, clamp01(sourceX), clamp01(sourceY));
+    }
+  };
+}
+
 function buildGlyphSampler(trial: ColorTrialSpec): GlyphSampler {
-  const strokes = GLYPH_STROKES[trial.hidden];
   const config = plateDifficultyConfig(trial);
+
+  if (trial.charType === "digit" && DIGIT_MASKS[trial.hidden]) {
+    return buildDigitGlyphSampler(trial, config);
+  }
+
+  const strokes = GLYPH_STROKES[trial.hidden];
   const random = createSeededRandom(trial.seed + 211);
   const rotation = (random() * 2 - 1) * config.maxRotation;
   const offsetX = (random() * 2 - 1) * config.maxOffset;
@@ -633,7 +974,7 @@ function buildGlyphSampler(trial: ColorTrialSpec): GlyphSampler {
   };
 }
 
-function sampleDotCoverage(sampler: GlyphSampler, x: number, y: number, radius: number) {
+function sampleDotCoverage(sampler: GlyphSampler, x: number, y: number, radius: number, config: DifficultyConfig) {
   const offsets = [
     [0, 0, 2],
     [-0.42, 0, 1],
@@ -645,7 +986,7 @@ function sampleDotCoverage(sampler: GlyphSampler, x: number, y: number, radius: 
     [-0.28, 0.28, 0.75],
     [0.28, 0.28, 0.75]
   ] as const;
-  const reach = radius * 0.86;
+  const reach = radius * config.coverageReach;
   const totalWeight = offsets.reduce((sum, [, , weight]) => sum + weight, 0);
   const covered = offsets.reduce(
     (sum, [offsetX, offsetY, weight]) => sum + sampler.coverageAt(x + offsetX * reach, y + offsetY * reach) * weight,
@@ -659,15 +1000,15 @@ function pickDotRadius(config: DifficultyConfig, random: () => number) {
   const span = config.maxDotRadius - config.minDotRadius;
   const bandRoll = random();
 
-  if (bandRoll < 0.18) {
-    return config.minDotRadius + span * (0.72 + random() * 0.28);
+  if (bandRoll < 0.08) {
+    return config.minDotRadius + span * (0.76 + random() * 0.24);
   }
 
-  if (bandRoll < 0.54) {
-    return config.minDotRadius + span * (0.38 + random() * 0.34);
+  if (bandRoll < 0.34) {
+    return config.minDotRadius + span * (0.42 + random() * 0.28);
   }
 
-  return config.minDotRadius + span * (0.04 + random() * 0.3);
+  return config.minDotRadius + span * (0.08 + random() * 0.26);
 }
 
 function buildPackedDots(config: DifficultyConfig, random: () => number) {
@@ -746,21 +1087,21 @@ function buildPackedDots(config: DifficultyConfig, random: () => number) {
   };
 
   for (const radius of candidates) {
-    if (tryPlace(radius, 42)) {
+    if (tryPlace(radius, 56)) {
       continue;
     }
 
     const reducedRadius = Math.max(config.minDotRadius * 0.92, radius * 0.92);
 
     if (reducedRadius < radius - 0.0005) {
-      tryPlace(reducedRadius, 26);
+      tryPlace(reducedRadius, 32);
     }
   }
 
   const minimumDots = Math.floor(config.dotCount * 0.88);
   let fillAttempts = 0;
 
-  while (dots.length < minimumDots && fillAttempts < config.dotCount * 8) {
+  while (dots.length < minimumDots && fillAttempts < config.dotCount * 10) {
     fillAttempts += 1;
     const radius = config.minDotRadius * (0.92 + random() * 0.2);
     tryPlace(radius, 1);
@@ -770,15 +1111,15 @@ function buildPackedDots(config: DifficultyConfig, random: () => number) {
 }
 
 function resolveDotMembership(coverage: number, config: DifficultyConfig, random: () => number) {
-  const nearEdge = coverage > 0.18 && coverage < 0.82;
-  let active = coverage >= 0.52;
+  const nearEdge = coverage > config.edgeLow && coverage < config.edgeHigh;
+  let active = coverage >= config.activationThreshold;
   const noise = random();
 
   if (active && nearEdge && noise < config.edgeDropChance) {
     active = false;
   } else if (!active && nearEdge && noise < config.edgeLeakChance) {
     active = true;
-  } else if (!active && coverage > 0.08 && noise < config.speckleChance) {
+  } else if (!active && coverage > config.edgeLow * 0.55 && noise < config.speckleChance) {
     active = true;
   }
 
@@ -789,8 +1130,8 @@ function resolveDotMembership(coverage: number, config: DifficultyConfig, random
   return active;
 }
 
-function pickDotColor(palette: PaletteConfig, isHidden: boolean, random: () => number) {
-  if (random() < 0.14) {
+function pickDotColor(palette: PaletteConfig, isHidden: boolean, random: () => number, config: DifficultyConfig) {
+  if (random() < config.sharedDotChance) {
     const sharedColors = palette.sharedDots;
     return sharedColors[Math.floor(random() * sharedColors.length) % sharedColors.length];
   }
@@ -817,14 +1158,14 @@ export function buildIshiharaPlate(trial: ColorTrialSpec): IshiharaPlate {
   const sampler = buildGlyphSampler(trial);
   const layout = buildPackedDots(config, random);
   const dots = layout.map(({ x, y, radius }) => {
-    const coverage = sampleDotCoverage(sampler, x, y, radius);
+    const coverage = sampleDotCoverage(sampler, x, y, radius, config);
     const isHidden = resolveDotMembership(coverage, config, random);
 
     return {
       x,
       y,
       radius,
-      color: pickDotColor(palette, isHidden, random),
+      color: pickDotColor(palette, isHidden, random, config),
       isHidden
     };
   });

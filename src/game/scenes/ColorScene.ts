@@ -255,21 +255,26 @@ export class ColorScene implements GameScene {
   }
 
   private drawIshihara(ctx: CanvasRenderingContext2D, trial: SceneTrial) {
-    const plateRadius = 134;
-    const dotScale = 126;
+    const plateRadius = 132;
+    const dotScale = 124;
 
     ctx.save();
     ctx.translate(270, 260);
-    ctx.shadowColor = "rgba(49, 33, 9, 0.16)";
-    ctx.shadowBlur = 26;
-    ctx.fillStyle = "#fffaf0";
+    ctx.shadowColor = "rgba(49, 33, 9, 0.1)";
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = "rgba(255, 251, 242, 0.96)";
     ctx.beginPath();
-    ctx.arc(0, 0, plateRadius + 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, plateRadius + 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.translate(270, 260);
+    ctx.fillStyle = "#fffdf7";
+    ctx.beginPath();
+    ctx.arc(0, 0, plateRadius + 1.2, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = trial.plate.backgroundColor;
     ctx.beginPath();
     ctx.arc(0, 0, plateRadius, 0, Math.PI * 2);
@@ -286,9 +291,15 @@ export class ColorScene implements GameScene {
     ctx.restore();
 
     ctx.strokeStyle = trial.plate.borderColor;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     ctx.arc(270, 260, plateRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.arc(270, 260, plateRadius + 1.9, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
