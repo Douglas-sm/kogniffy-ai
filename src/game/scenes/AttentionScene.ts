@@ -98,7 +98,7 @@ const TARGET_CARD = {
   x: 738,
   y: 148,
   width: 192,
-  height: 214
+  height: 238
 };
 const RULES: AttentionRule[] = [
   {
@@ -268,6 +268,10 @@ export class AttentionScene implements GameScene {
 
   getHudMessage(engine: GameEngine) {
     return this.headerLine(engine);
+  }
+
+  shouldShowHudRightColumn() {
+    return false;
   }
 
   getHudStats() {
@@ -1042,11 +1046,11 @@ export class AttentionScene implements GameScene {
     ctx.fillStyle = "#173b4f";
     ctx.font = "900 14px Trebuchet MS, sans-serif";
     ctx.textBaseline = "middle";
-    ctx.fillText(this.currentRule.shortLabel, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 181);
+    ctx.fillText(this.currentRule.shortLabel, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 193);
 
     const progressPercent = Math.round(this.bridgeProgress * 100);
     const barX = TARGET_CARD.x + 26;
-    const barY = TARGET_CARD.y + 190;
+    const barY = TARGET_CARD.y + 204;
     const barWidth = TARGET_CARD.width - 52;
     const barHeight = 20;
 

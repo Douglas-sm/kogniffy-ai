@@ -26,7 +26,6 @@ function MountainKogArt() {
         <circle cx="252" cy="114" r="15" fill="#6fd6c5" />
         <circle cx="258" cy="108" r="5" fill="#fff" />
         <path d="M205 139l-31 24m125-24l31 24" stroke="#173b4f" strokeLinecap="round" strokeWidth="9" />
-        <path d="M222 168l-12 27m72-27l12 27" stroke="#f06f59" strokeLinecap="round" strokeWidth="10" />
       </g>
     </svg>
   );

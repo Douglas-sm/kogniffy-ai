@@ -15,12 +15,14 @@ const COLUMN_GAP = 20;
 export class Hud {
   draw(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     const scene = engine.currentScene;
+    const showRightColumn = scene.shouldShowHudRightColumn?.(engine) ?? true;
     const message = scene.getHudMessage?.(engine) ?? scene.objective;
-    const stats = (scene.getHudStats?.(engine) ?? []).slice(0, 4);
+    const stats = showRightColumn ? (scene.getHudStats?.(engine) ?? []).slice(0, 4) : [];
     const leftX = CARD_X + LEFT_PADDING;
     const rightX = CARD_X + CARD_WIDTH - RIGHT_PADDING;
     const rightColumnLeft = rightX - RIGHT_COLUMN_WIDTH;
-    const messageWidth = rightColumnLeft - leftX - COLUMN_GAP;
+    const messageRightLimit = showRightColumn ? rightColumnLeft - COLUMN_GAP : rightX;
+    const messageWidth = messageRightLimit - leftX;
 
     drawRoundedRect(ctx, CARD_X, CARD_Y, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
     ctx.fillStyle = "rgba(255, 249, 233, 0.86)";
@@ -37,6 +39,10 @@ export class Hud {
     wrapTextToLines(ctx, message, messageWidth, 2).forEach((line, index) => {
       ctx.fillText(line, leftX, CARD_Y + 34 + index * 14);
     });
+
+    if (!showRightColumn) {
+      return;
+    }
 
     ctx.textAlign = "right";
     ctx.textBaseline = "top";

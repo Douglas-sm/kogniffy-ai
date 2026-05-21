@@ -62,6 +62,7 @@ export interface GameScene {
   onKeyDown?(engine: GameEngine, key: string): void;
   onAutoHelp?(engine: GameEngine): void;
   shouldShowAutoHelpDialog?(engine: GameEngine): boolean;
+  shouldShowHudRightColumn?(engine: GameEngine): boolean;
   getHudMessage?(engine: GameEngine): string;
   getHudStats?(engine: GameEngine): string[];
   getCanvasCursor?(engine: GameEngine): string;
