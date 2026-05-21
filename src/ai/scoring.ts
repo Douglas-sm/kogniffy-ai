@@ -166,6 +166,14 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const avgResponse = average(metrics.responseTimes);
   const avgHesitation = average(metrics.hesitationTimes);
   const avgFirstClick = average(metrics.firstClickTimes);
+  const dyslexiaPhase = metrics.dyslexiaPhase;
+  const dyslexiaAvgResponse = average(dyslexiaPhase.responseTimes);
+  const dyslexiaAvgFirstClick = average(dyslexiaPhase.firstClickTimes);
+  const dyslexiaAccuracyPenalty = 1 - rate(dyslexiaPhase.hits, dyslexiaPhase.attempts);
+  const dyslexiaCompletionPenalty = 1 - rate(dyslexiaPhase.completedWords, dyslexiaPhase.startedWords);
+  const dyslexiaInversionRate = rate(dyslexiaPhase.inversionErrors, dyslexiaPhase.attempts);
+  const dyslexiaCorrectionRate = rate(dyslexiaPhase.corrections, dyslexiaPhase.attempts);
+  const dyslexiaAutoHelpRate = rate(dyslexiaPhase.autoHelpCount, dyslexiaPhase.startedWords);
   const colorAvgResponse = average(metrics.colorPhase.responseTimes);
   const colorResponseDeviation = Math.sqrt(variance(metrics.colorPhase.responseTimes));
   const redGreenMissRate = missRateFromResponses(metrics, (response) => response.trialType === "redGreen");
@@ -207,12 +215,20 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const lateMissRate = attentionEndSegment ? rate(attentionEndSegment.omissions, attentionEndSegment.targetSpawns) : 0;
 
   const dyslexiaValue =
-    metrics.inversionErrors * 17 +
-    metrics.repeatedErrors * 5 +
-    metrics.corrections * 4 +
-    avgHesitation / 120 +
-    avgFirstClick / 160 +
-    avgResponse / 180;
+    dyslexiaPhase.startedWords > 0
+      ? dyslexiaAccuracyPenalty * 26 +
+        dyslexiaCompletionPenalty * 18 +
+        dyslexiaInversionRate * 30 +
+        dyslexiaCorrectionRate * 12 +
+        dyslexiaAutoHelpRate * 18 +
+        dyslexiaAvgFirstClick / 220 +
+        dyslexiaAvgResponse / 240
+      : metrics.inversionErrors * 17 +
+        metrics.repeatedErrors * 5 +
+        metrics.corrections * 4 +
+        avgHesitation / 120 +
+        avgFirstClick / 160 +
+        avgResponse / 180;
 
   const colorVisionValue =
     metrics.colorPhase.startedTrials > 0

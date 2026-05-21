@@ -9,17 +9,10 @@ import { predictColorVisionRisk } from "@/ai/colorblindModel";
 import { predictCognitivePerformance } from "@/ai/cognitivePerformanceModel";
 import { predictDyslexiaRisk } from "@/ai/dyslexiaModel";
 import { predictReactionTimeRisk } from "@/ai/reactionTimeModel";
-import {
-  calculateMemoryReactionCompositeRisk,
-  calculateScores,
-  overrideAttentionRisk,
-  overrideCognitivePerformanceRisk,
-  overrideColorVisionRisk,
-  overrideDyslexiaRisk,
-  overrideMemoryReactionRisk
-} from "@/ai/scoring";
+import { calculateScores } from "@/ai/scoring";
 import { loadMetricsSnapshot, type MetricsSnapshot } from "@/metrics/metricsCollector";
 import { generateReport, type KogniffyReport } from "@/report/generateReport";
+import { resolveScores } from "@/report/resolveScores";
 import {
   TRIAGE_BAND_DEFINITIONS,
   triageBandDefinitionForKey
@@ -32,6 +25,7 @@ type ReportSeriesPoint = {
   label: string;
   value: number;
 };
+type LoadStatus = "loading" | "ready" | "missing" | "error";
 
 type ReportState = {
   report: KogniffyReport;
@@ -44,6 +38,14 @@ type ReportState = {
   positiveCount: number;
   watchCount: number;
 };
+
+const REPORT_ANALYSIS_STEPS = [
+  "Lendo métricas da sessão",
+  "Conferindo sinais comportamentais",
+  "Calibrando modelos e proxies",
+  "Montando relatório final"
+] as const;
+const MIN_LOADING_MS = 1_200;
 
 const HIDDEN_DETAIL_LABELS = new Set([
   "Modo de inferência",
@@ -197,8 +199,75 @@ function destroyCharts(charts: Record<ChartKey, ChartInstance | null>) {
   });
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function AnalysisOverlay({ stepIndex }: { stepIndex: number }) {
+  const progress = ((stepIndex + 1) / REPORT_ANALYSIS_STEPS.length) * 100;
+
+  return (
+    <div className={styles.analysisOverlay} role="dialog" aria-modal="true" aria-labelledby="analysis-title">
+      <div className={styles.analysisModal}>
+        <div className={styles.analysisScreen}>
+          <div className={styles.analysisScanline} />
+          <div className={styles.analysisGrid} />
+          <div className={styles.analysisHeaderRow}>
+            <span className={styles.analysisLed} />
+            <span>Kogniffy AI :: Session Analyzer</span>
+          </div>
+          <div className={styles.analysisBars} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className={styles.analysisCore}>
+            <div className={styles.analysisOrbital}>
+              <div className={styles.analysisCoreDot} />
+            </div>
+            <div>
+              <p className={styles.analysisKicker}>Computador analisando comportamento</p>
+              <h1 id="analysis-title" className={styles.analysisTitle}>
+                Gerando relatório
+              </h1>
+              <p className={styles.analysisCopy}>
+                A IA está consolidando as métricas da sessão, calibrando sinais e validando os índices finais.
+              </p>
+            </div>
+          </div>
+          <div className={styles.analysisProgressWrap} aria-hidden="true">
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          <ul className={styles.analysisSteps} aria-live="polite">
+            {REPORT_ANALYSIS_STEPS.map((label, index) => (
+              <li
+                key={label}
+                className={
+                  index < stepIndex
+                    ? styles.analysisStepDone
+                    : index === stepIndex
+                      ? styles.analysisStepActive
+                      : styles.analysisStepIdle
+                }
+              >
+                <span />
+                <strong>{label}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportPage() {
   const [state, setState] = useState<ReportState | null>(null);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
+  const [analysisStep, setAnalysisStep] = useState(0);
   const overviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overallCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const attentionCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -214,75 +283,96 @@ export default function ReportPage() {
     let active = true;
 
     async function buildState() {
-      const metrics = loadMetricsSnapshot();
+      setLoadStatus("loading");
+      setAnalysisStep(0);
 
-      if (!metrics) {
-        return;
+      try {
+        const startedAt = performance.now();
+        const metrics = loadMetricsSnapshot();
+
+        if (!metrics) {
+          if (!active) {
+            return;
+          }
+
+          setLoadStatus("missing");
+          return;
+        }
+
+        await wait(160);
+
+        if (!active) {
+          return;
+        }
+
+        const heuristicScores = calculateScores(metrics);
+        setAnalysisStep(1);
+
+        await wait(180);
+
+        if (!active) {
+          return;
+        }
+
+        setAnalysisStep(2);
+        const [
+          dyslexiaPrediction,
+          predictedColorVisionRisk,
+          attentionPrediction,
+          cognitivePerformancePrediction,
+          reactionTimePrediction
+        ] = await Promise.all([
+          predictDyslexiaRisk(metrics),
+          predictColorVisionRisk(metrics),
+          predictAttentionRisk(metrics),
+          predictCognitivePerformance(metrics),
+          predictReactionTimeRisk(metrics)
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const resolved = resolveScores({
+          heuristicScores,
+          dyslexiaPrediction,
+          colorVisionRisk: predictedColorVisionRisk,
+          attentionPrediction,
+          reactionTimePrediction,
+          cognitivePerformancePrediction
+        });
+
+        setAnalysisStep(3);
+
+        const report = generateReport(metrics, resolved.scores, {
+          dyslexiaPrediction,
+          attentionPrediction,
+          attentionHeuristicScore: heuristicScores.attentionRisk.value,
+          cognitivePerformancePrediction,
+          reactionTimePrediction,
+          memoryReactionHeuristicScore: heuristicScores.memoryReactionRisk.value,
+          scoreResolutions: resolved.resolutions
+        });
+
+        const remainingMs = Math.max(0, MIN_LOADING_MS - (performance.now() - startedAt));
+
+        if (remainingMs > 0) {
+          await wait(remainingMs);
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setState(buildReportState(metrics, report));
+        setLoadStatus("ready");
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setLoadStatus("error");
       }
-
-      const heuristicScores = calculateScores(metrics);
-      const heuristicReport = generateReport(metrics, heuristicScores, {
-        attentionHeuristicScore: heuristicScores.attentionRisk.value,
-        memoryReactionHeuristicScore: heuristicScores.memoryReactionRisk.value
-      });
-
-      setState(buildReportState(metrics, heuristicReport));
-
-      const [
-        predictedDyslexiaRisk,
-        predictedColorVisionRisk,
-        attentionPrediction,
-        cognitivePerformancePrediction,
-        reactionTimePrediction
-      ] = await Promise.all([
-        predictDyslexiaRisk(metrics),
-        predictColorVisionRisk(metrics),
-        predictAttentionRisk(metrics),
-        predictCognitivePerformance(metrics),
-        predictReactionTimeRisk(metrics)
-      ]);
-
-      if (!active) {
-        return;
-      }
-
-      let modelScores = heuristicScores;
-
-      if (predictedDyslexiaRisk !== null) {
-        modelScores = overrideDyslexiaRisk(modelScores, predictedDyslexiaRisk);
-      }
-
-      if (predictedColorVisionRisk !== null) {
-        modelScores = overrideColorVisionRisk(modelScores, predictedColorVisionRisk);
-      }
-
-      if (attentionPrediction !== null) {
-        modelScores = overrideAttentionRisk(modelScores, attentionPrediction.score);
-      }
-
-      if (reactionTimePrediction !== null) {
-        modelScores = overrideMemoryReactionRisk(
-          modelScores,
-          calculateMemoryReactionCompositeRisk(
-            reactionTimePrediction.riskScore,
-            heuristicScores.memoryReactionRisk.value
-          )
-        );
-      }
-
-      if (cognitivePerformancePrediction !== null) {
-        modelScores = overrideCognitivePerformanceRisk(modelScores, cognitivePerformancePrediction.riskScore);
-      }
-
-      const report = generateReport(metrics, modelScores, {
-        attentionPrediction,
-        attentionHeuristicScore: heuristicScores.attentionRisk.value,
-        cognitivePerformancePrediction,
-        reactionTimePrediction,
-        memoryReactionHeuristicScore: heuristicScores.memoryReactionRisk.value
-      });
-
-      setState(buildReportState(metrics, report));
     }
 
     buildState();
@@ -514,16 +604,28 @@ export default function ReportPage() {
     };
   }, [state]);
 
-  if (!state) {
+  if (loadStatus === "missing" || loadStatus === "error") {
     return (
       <main className={styles.page}>
         <section className={styles.empty}>
-          <h1>Relatório não encontrado</h1>
-          <p>Nenhuma sessão local foi encontrada neste navegador. Jogue a aventura para gerar um painel de triagem.</p>
+          <h1>{loadStatus === "missing" ? "Relatório não encontrado" : "Não foi possível gerar o relatório"}</h1>
+          <p>
+            {loadStatus === "missing"
+              ? "Nenhuma sessão local foi encontrada neste navegador. Jogue a aventura para gerar um painel de triagem."
+              : "Houve um problema ao consolidar esta sessão. Execute a atividade novamente para gerar um novo painel."}
+          </p>
           <Link className={styles.button} href="/game">
             Jogar
           </Link>
         </section>
+      </main>
+    );
+  }
+
+  if (!state) {
+    return (
+      <main className={styles.page}>
+        <AnalysisOverlay stepIndex={analysisStep} />
       </main>
     );
   }
@@ -675,7 +777,7 @@ export default function ReportPage() {
           </article>
         </section>
 
-        <section className={styles.panel}>
+        <section className={`${styles.panel} ${styles.panelGuide}`}>
           <div className={styles.panelHeader}>
             <div>
               <p className={styles.panelEyebrow}>Próximos passos</p>
@@ -752,6 +854,7 @@ export default function ReportPage() {
           })}
         </section>
       </div>
+      {loadStatus === "loading" ? <AnalysisOverlay stepIndex={analysisStep} /> : null}
     </main>
   );
 }

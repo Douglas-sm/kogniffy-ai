@@ -194,6 +194,10 @@
   padding: clamp(1rem, 2vw, 1.4rem);
 }
 
+.panelGuide {
+  margin-bottom: 1rem;
+}
+
 .panelHeader {
   align-items: start;
   display: flex;
@@ -461,6 +465,317 @@
   padding: 0.9rem 1.2rem;
 }
 
+.analysisOverlay {
+  align-items: center;
+  backdrop-filter: blur(10px);
+  background: rgba(7, 18, 26, 0.58);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 50;
+}
+
+.analysisModal {
+  max-width: 46rem;
+  width: min(100%, 46rem);
+}
+
+.analysisScreen {
+  background:
+    radial-gradient(circle at top right, rgba(73, 246, 255, 0.16), transparent 18rem),
+    linear-gradient(180deg, rgba(9, 18, 31, 0.98) 0%, rgba(3, 10, 18, 0.98) 100%);
+  border: 0.14rem solid rgba(111, 214, 197, 0.24);
+  border-radius: 1.6rem;
+  box-shadow: 0 2rem 4rem rgba(2, 11, 17, 0.42);
+  color: #dff7ff;
+  overflow: hidden;
+  padding: 1.1rem;
+  position: relative;
+}
+
+.analysisScanline,
+.analysisGrid {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.analysisScanline {
+  animation: analysisScan 2.8s linear infinite;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(111, 214, 197, 0.16), rgba(255, 255, 255, 0));
+  height: 6rem;
+  top: -6rem;
+}
+
+.analysisGrid {
+  background-image:
+    linear-gradient(rgba(111, 214, 197, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 214, 197, 0.08) 1px, transparent 1px);
+  background-size: 1.4rem 1.4rem;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 92%);
+  opacity: 0.4;
+}
+
+.analysisHeaderRow {
+  align-items: center;
+  color: #95d7df;
+  display: flex;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 0.6rem;
+  letter-spacing: 0.08em;
+  position: relative;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.analysisLed {
+  animation: analysisPulse 1.2s ease-in-out infinite;
+  background: #7dff72;
+  border-radius: 999px;
+  box-shadow: 0 0 1rem rgba(125, 255, 114, 0.6);
+  display: inline-flex;
+  height: 0.65rem;
+  width: 0.65rem;
+}
+
+.analysisBars {
+  align-items: end;
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 1rem;
+  min-height: 3.6rem;
+  position: relative;
+  z-index: 1;
+}
+
+.analysisBars span {
+  animation: analysisBars 1.4s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(73, 246, 255, 0.9), rgba(73, 246, 255, 0.18));
+  border-radius: 999px 999px 0 0;
+  display: block;
+  height: 100%;
+}
+
+.analysisBars span:nth-child(1) {
+  animation-delay: 0s;
+  height: 38%;
+}
+
+.analysisBars span:nth-child(2) {
+  animation-delay: 0.08s;
+  height: 82%;
+}
+
+.analysisBars span:nth-child(3) {
+  animation-delay: 0.16s;
+  height: 56%;
+}
+
+.analysisBars span:nth-child(4) {
+  animation-delay: 0.24s;
+  height: 92%;
+}
+
+.analysisBars span:nth-child(5) {
+  animation-delay: 0.32s;
+  height: 48%;
+}
+
+.analysisBars span:nth-child(6) {
+  animation-delay: 0.4s;
+  height: 72%;
+}
+
+.analysisCore {
+  align-items: center;
+  display: grid;
+  gap: 1.2rem;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  margin-top: 1.2rem;
+  position: relative;
+  z-index: 1;
+}
+
+.analysisOrbital {
+  align-items: center;
+  border: 0.12rem solid rgba(73, 246, 255, 0.28);
+  border-radius: 50%;
+  display: flex;
+  height: 8rem;
+  justify-content: center;
+  position: relative;
+  width: 8rem;
+}
+
+.analysisOrbital::before,
+.analysisOrbital::after {
+  border: 0.12rem solid rgba(73, 246, 255, 0.18);
+  border-radius: 50%;
+  content: "";
+  inset: 0.7rem;
+  position: absolute;
+}
+
+.analysisOrbital::after {
+  animation: analysisOrbit 3.2s linear infinite;
+  inset: 1.45rem;
+}
+
+.analysisCoreDot {
+  animation: analysisPulse 1.6s ease-in-out infinite;
+  background: radial-gradient(circle, #fff9e9 0%, #49f6ff 45%, rgba(73, 246, 255, 0.16) 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 1.6rem rgba(73, 246, 255, 0.46);
+  height: 2.2rem;
+  width: 2.2rem;
+}
+
+.analysisKicker {
+  color: #8ac5d0;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.analysisTitle {
+  color: #f2fbff;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 0.94;
+  margin: 0.45rem 0 0;
+}
+
+.analysisCopy {
+  color: #badce2;
+  line-height: 1.7;
+  margin: 0.85rem 0 0;
+  max-width: 30rem;
+}
+
+.analysisProgressWrap {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  height: 0.7rem;
+  margin-top: 1.4rem;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.analysisProgressWrap span {
+  background: linear-gradient(90deg, #49f6ff 0%, #7dff72 100%);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
+.analysisSteps {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.analysisSteps li {
+  align-items: center;
+  display: flex;
+  gap: 0.8rem;
+}
+
+.analysisSteps li span {
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 0.8rem;
+  width: 0.8rem;
+}
+
+.analysisSteps li strong {
+  font-size: 0.96rem;
+}
+
+.analysisStepDone {
+  color: #e5fff4;
+}
+
+.analysisStepDone span {
+  background: #7dff72;
+  box-shadow: 0 0 1rem rgba(125, 255, 114, 0.34);
+}
+
+.analysisStepActive {
+  color: #f3fdff;
+}
+
+.analysisStepActive span {
+  animation: analysisPulse 1.2s ease-in-out infinite;
+  background: #49f6ff;
+  box-shadow: 0 0 1rem rgba(73, 246, 255, 0.44);
+}
+
+.analysisStepIdle {
+  color: #84aab1;
+}
+
+.analysisStepIdle span {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+@keyframes analysisPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes analysisScan {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(32rem);
+  }
+}
+
+@keyframes analysisBars {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scaleY(0.88);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scaleY(1.08);
+  }
+}
+
+@keyframes analysisOrbit {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 1120px) {
   .legendPanel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -510,5 +825,13 @@
   .scoreSpotlight strong,
   .gaugeCenter strong {
     font-size: 2.5rem;
+  }
+
+  .analysisCore {
+    grid-template-columns: 1fr;
+  }
+
+  .analysisOrbital {
+    margin: 0 auto;
   }
 }

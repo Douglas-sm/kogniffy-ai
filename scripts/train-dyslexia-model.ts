@@ -5,8 +5,11 @@ import {
   DYSLEXIA_MODEL_FEATURES,
   DYSLEXIA_PHASE_DATASET_QUESTIONS,
   buildDyslexiaFeatureVectorFromAggregate,
+  type DyslexiaFixtureChecks,
   type DyslexiaFeatureNormalization,
-  type DyslexiaModelMetadata
+  type DyslexiaModelMetadata,
+  type DyslexiaModelTrainingMetrics,
+  type DyslexiaRiskMapping
 } from "../src/ai/dyslexiaFeatures";
 
 type TensorFlowModule = typeof tfFallback;
@@ -240,6 +243,86 @@ function normalizeRows(rows: TrainingRow[], normalization: DyslexiaFeatureNormal
   );
 }
 
+function normalizeFeatureVector(featureVector: number[], normalization: DyslexiaFeatureNormalization[]) {
+  return normalization.map(({ mean, std }, featureIndex) => (featureVector[featureIndex] - mean) / std);
+}
+
+async function predictProbability(
+  tf: TensorFlowModule,
+  model: tfFallback.LayersModel,
+  featureVector: number[]
+) {
+  const input = tf.tensor2d([featureVector]);
+  const output = model.predict(input);
+
+  if (Array.isArray(output)) {
+    input.dispose();
+    output.forEach((tensor) => tensor.dispose());
+    return null;
+  }
+
+  const prediction = output as tfFallback.Tensor;
+  const values = Array.from(await prediction.data());
+
+  input.dispose();
+  prediction.dispose();
+
+  return typeof values[0] === "number" ? values[0] : null;
+}
+
+function toRiskFromProbability(probability: number, riskMapping: DyslexiaRiskMapping) {
+  const mapped = riskMapping === "oneMinusProbability" ? 1 - probability : probability;
+  return Math.max(0, Math.min(100, Math.round(mapped * 100)));
+}
+
+async function evaluateFixtures(
+  tf: TensorFlowModule,
+  model: tfFallback.LayersModel,
+  normalization: DyslexiaFeatureNormalization[]
+) {
+  const goodControl = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 6,
+    totalClicks: 24,
+    totalHits: 24,
+    totalMisses: 0
+  });
+  const badControl = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 6,
+    totalClicks: 48,
+    totalHits: 12,
+    totalMisses: 18
+  });
+  const goodProbability = await predictProbability(tf, model, normalizeFeatureVector(goodControl, normalization));
+  const badProbability = await predictProbability(tf, model, normalizeFeatureVector(badControl, normalization));
+
+  if (goodProbability === null || badProbability === null) {
+    return {
+      riskMapping: "probability" as const,
+      fixtureChecks: {
+        goodControlRisk: 0,
+        badControlRisk: 0,
+        passed: false
+      }
+    };
+  }
+
+  const probabilityGap = badProbability - goodProbability;
+  const invertedGap = (1 - badProbability) - (1 - goodProbability);
+  const riskMapping: DyslexiaRiskMapping = probabilityGap >= invertedGap ? "probability" : "oneMinusProbability";
+  const goodControlRisk = toRiskFromProbability(goodProbability, riskMapping);
+  const badControlRisk = toRiskFromProbability(badProbability, riskMapping);
+  const fixtureChecks: DyslexiaFixtureChecks = {
+    goodControlRisk,
+    badControlRisk,
+    passed: badControlRisk >= goodControlRisk + 10
+  };
+
+  return {
+    riskMapping,
+    fixtureChecks
+  };
+}
+
 function weightDataToBuffer(weightData?: tfFallback.io.WeightData) {
   if (!weightData) {
     return Buffer.alloc(0);
@@ -280,6 +363,7 @@ async function saveModelToFiles(
       await fs.writeFile(path.join(outputDir, "model.json"), JSON.stringify(modelJson, null, 2), "utf8");
       await fs.writeFile(path.join(outputDir, weightFileName), weightDataBuffer);
       await fs.writeFile(path.join(outputDir, "normalization.json"), JSON.stringify(metadata, null, 2), "utf8");
+      await fs.writeFile(path.join(outputDir, "metadata.json"), JSON.stringify(metadata, null, 2), "utf8");
 
       return {
         modelArtifactsInfo: {
@@ -371,13 +455,13 @@ async function main() {
     }
   });
 
-  const finalMetrics = {
-    historyKeys: Object.keys(history.history),
-    loss: lastHistoryValue(history.history, "loss"),
-    accuracy: lastHistoryValue(history.history, "acc", "accuracy"),
-    valLoss: lastHistoryValue(history.history, "val_loss"),
-    valAccuracy: lastHistoryValue(history.history, "val_acc", "val_accuracy")
+  const finalMetrics: DyslexiaModelTrainingMetrics = {
+    loss: (lastHistoryValue(history.history, "loss") as number | undefined) ?? null,
+    accuracy: (lastHistoryValue(history.history, "acc", "accuracy") as number | undefined) ?? null,
+    valLoss: (lastHistoryValue(history.history, "val_loss") as number | undefined) ?? null,
+    valAccuracy: (lastHistoryValue(history.history, "val_acc", "val_accuracy") as number | undefined) ?? null
   };
+  const { riskMapping, fixtureChecks } = await evaluateFixtures(tf, model, normalization);
   const metadata: DyslexiaModelMetadata = {
     features: [...DYSLEXIA_MODEL_FEATURES],
     normalization,
@@ -387,6 +471,9 @@ async function main() {
       noDyslexia: negativeCount,
       dyslexia: positiveCount
     },
+    trainingMetrics: finalMetrics,
+    riskMapping,
+    fixtureChecks,
     trainedAt: new Date().toISOString()
   };
 
@@ -399,6 +486,8 @@ async function main() {
   model.dispose();
 
   log("Final metrics", finalMetrics);
+  log("Fixture checks", fixtureChecks);
+  log("Risk mapping", riskMapping);
   log(`Model saved to ${outputDir}`);
 }
 

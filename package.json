@@ -15,7 +15,8 @@
     "generate:colorblind": "node --import tsx scripts/generate-colorblind-resources.ts",
     "train:colorblind": "node --import tsx scripts/train-colorblind-model.ts",
     "train:cognitiveperformance": "node --import tsx scripts/train-cognitiveperformance-model.ts",
-    "train:reactiontime": "node --import tsx scripts/train-reactiontime-model.ts"
+    "train:reactiontime": "node --import tsx scripts/train-reactiontime-model.ts",
+    "validate:models": "node --import tsx scripts/validate-model-artifacts.ts"
   },
   "pnpm": {
     "supportedArchitectures": {

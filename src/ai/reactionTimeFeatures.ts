@@ -187,12 +187,12 @@ export function buildReactionTimeProxySnapshot(metrics: MetricsSnapshot): Reacti
     maxSequenceReached > 0 || errorCount > 0 ? 1 : 0
   );
   const reactionTimeProxyMs = clamp(
-    0.7 * primaryResponseTimeMs +
-      0.3 * interClickTimeMs +
-      0.15 * reactionStdMs +
-      12 * errorCount +
-      10 * impulsivityCount +
-      0.25 * Math.max(0, fatigueDeltaMs),
+    0.2 * primaryResponseTimeMs +
+      0.65 * interClickTimeMs +
+      0.05 * reactionStdMs +
+      22 * errorCount +
+      14 * impulsivityCount +
+      0.18 * Math.max(0, fatigueDeltaMs),
     REACTION_TIME_DATASET_MIN_MS,
     REACTION_TIME_DATASET_MAX_MS
   );

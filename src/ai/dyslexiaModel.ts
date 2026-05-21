@@ -2,6 +2,7 @@ import type { LayersModel, Tensor } from "@tensorflow/tfjs";
 import {
   buildDyslexiaFeatureVectorFromPhase,
   normalizeDyslexiaFeatureVector,
+  type DyslexiaRiskMapping,
   type DyslexiaModelMetadata
 } from "@/ai/dyslexiaFeatures";
 import { clampScore } from "@/ai/scoring";
@@ -11,6 +12,27 @@ const MODEL_BASE_URL = "/api/models/dyslexia";
 
 let dyslexiaModelPromise: Promise<LayersModel | null> | null = null;
 let dyslexiaMetadataPromise: Promise<DyslexiaModelMetadata | null> | null = null;
+
+export interface DyslexiaPrediction {
+  riskScore: number;
+  rawProbability: number;
+  outputMode: DyslexiaRiskMapping;
+  featureVector: number[];
+  normalizedFeatures: number[];
+  metadataSummary: Pick<
+    DyslexiaModelMetadata,
+    "questionIds" | "rowCount" | "classDistribution" | "trainingMetrics" | "riskMapping" | "fixtureChecks" | "trainedAt"
+  >;
+}
+
+function clampUnit(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function toRiskScore(probability: number, outputMode: DyslexiaRiskMapping) {
+  const mapped = outputMode === "oneMinusProbability" ? 1 - probability : probability;
+  return clampScore(mapped * 100);
+}
 
 function isMetadata(value: unknown): value is DyslexiaModelMetadata {
   if (typeof value !== "object" || value === null) {
@@ -65,7 +87,7 @@ async function loadDyslexiaMetadata(): Promise<DyslexiaModelMetadata | null> {
   return dyslexiaMetadataPromise;
 }
 
-export async function predictDyslexiaRisk(metrics: MetricsSnapshot): Promise<number | null> {
+export async function predictDyslexiaRisk(metrics: MetricsSnapshot): Promise<DyslexiaPrediction | null> {
   const featureVector = buildDyslexiaFeatureVectorFromPhase(metrics.dyslexiaPhase);
 
   if (!featureVector) {
@@ -99,5 +121,23 @@ export async function predictDyslexiaRisk(metrics: MetricsSnapshot): Promise<num
     return null;
   }
 
-  return clampScore(values[0] * 100);
+  const rawProbability = clampUnit(values[0] ?? 0);
+  const outputMode = metadata.riskMapping ?? "probability";
+
+  return {
+    riskScore: toRiskScore(rawProbability, outputMode),
+    rawProbability,
+    outputMode,
+    featureVector,
+    normalizedFeatures,
+    metadataSummary: {
+      questionIds: metadata.questionIds,
+      rowCount: metadata.rowCount,
+      classDistribution: metadata.classDistribution,
+      trainingMetrics: metadata.trainingMetrics,
+      riskMapping: outputMode,
+      fixtureChecks: metadata.fixtureChecks,
+      trainedAt: metadata.trainedAt
+    }
+  };
 }
