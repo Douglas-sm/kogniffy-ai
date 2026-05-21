@@ -10,7 +10,6 @@ import {
   type ChoiceButtonState,
   drawCaveBackground,
   drawChoiceButton,
-  drawPanelText,
   drawPlatform,
   pointInRect
 } from "@/game/scenes/sceneUtils";
@@ -100,6 +99,14 @@ export class ColorScene implements GameScene {
     engine.metrics.recordColorTrialStarted(trial.type, trial.charType);
   }
 
+  getHudMessage() {
+    const trial = this.currentTrial();
+
+    return this.completed
+      ? "O portal abriu no centro. Caminhe até ele para seguir."
+      : trial?.prompt ?? "Portão desbloqueado. O código foi aceito.";
+  }
+
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     drawCaveBackground(ctx, engine.timeMs, "#6b7bd6");
     for (const platform of this.platforms) {
@@ -107,11 +114,6 @@ export class ColorScene implements GameScene {
     }
 
     const trial = this.currentTrial();
-    drawPanelText(
-      ctx,
-      "Código numérico",
-      this.completed ? "O portal abriu no centro. Caminhe até ele para seguir." : trial?.prompt ?? "Portão desbloqueado. O código foi aceito."
-    );
 
     if (!trial) {
       return;

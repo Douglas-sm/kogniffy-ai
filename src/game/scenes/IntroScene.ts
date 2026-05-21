@@ -1,11 +1,5 @@
 import type { GameEngine, GameScene, Platform, Rect } from "@/game/engine/GameEngine";
-import {
-  drawCaveBackground,
-  drawCaveEntrance,
-  drawGoalArrow,
-  drawPanelText,
-  drawPlatform
-} from "@/game/scenes/sceneUtils";
+import { drawCaveBackground, drawCaveEntrance, drawGoalArrow, drawPlatform } from "@/game/scenes/sceneUtils";
 
 export class IntroScene implements GameScene {
   id = "intro";
@@ -32,6 +26,10 @@ export class IntroScene implements GameScene {
 
   update() {
     return;
+  }
+
+  getHudMessage() {
+    return "Siga reto até o buraco da caverna marcado pela seta vermelha.";
   }
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
@@ -61,8 +59,6 @@ export class IntroScene implements GameScene {
     for (const platform of this.platforms) {
       drawPlatform(ctx, platform);
     }
-
-    drawPanelText(ctx, "Entrada da montanha", "Siga reto até o buraco da caverna marcado pela seta vermelha.");
   }
 
   getExitZone() {

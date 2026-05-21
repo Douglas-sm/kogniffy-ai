@@ -1,10 +1,5 @@
 import type { GameEngine, GameScene, Platform, PointerPosition } from "@/game/engine/GameEngine";
-import {
-  drawCaveBackground,
-  drawPanelText,
-  drawPlatform,
-  drawRoundedRect
-} from "@/game/scenes/sceneUtils";
+import { drawCaveBackground, drawPlatform, drawRoundedRect } from "@/game/scenes/sceneUtils";
 
 interface FlyingLetter {
   char: string;
@@ -139,12 +134,6 @@ export class DyslexiaScene implements GameScene {
       drawPlatform(ctx, platform);
     }
 
-    drawPanelText(
-      ctx,
-      "Letras mágicas",
-      this.completed ? "Portal aberto no centro. Leve o robô até ele para continuar." : this.renderHeaderLine()
-    );
-
     for (const letter of this.letters) {
       this.drawFlyingLetter(ctx, letter, engine.timeMs);
     }
@@ -215,6 +204,10 @@ export class DyslexiaScene implements GameScene {
   onAutoHelp(engine: GameEngine) {
     this.pendingAdvance = null;
     this.complete(engine);
+  }
+
+  getHudMessage() {
+    return this.completed ? "Portal aberto no centro. Leve o robô até ele para continuar." : this.renderHeaderLine();
   }
 
   getCanvasCursor(engine: GameEngine) {

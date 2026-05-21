@@ -1,6 +1,6 @@
 import { predictAttentionRisk, warmAttentionModel } from "@/ai/adhdModel";
 import type { GameEngine, GameScene, Platform, PointerPosition, Rect } from "@/game/engine/GameEngine";
-import { drawCaveBackground, drawPanelText, drawRoundedRect } from "@/game/scenes/sceneUtils";
+import { drawCaveBackground, drawRoundedRect } from "@/game/scenes/sceneUtils";
 import type { AttentionRuleId } from "@/metrics/metricsCollector";
 
 type CrystalColor = "blue" | "red" | "green" | "gold";
@@ -234,8 +234,6 @@ export class AttentionScene implements GameScene {
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     drawCaveBackground(ctx, engine.timeMs, "#365e6b");
     this.drawCaveShell(ctx, engine.timeMs);
-    drawPanelText(ctx, "Ponte de cristal", this.headerLine(engine));
-    this.drawStatsCard(ctx);
     this.drawTargetCard(ctx, engine.timeMs);
 
     const shake = this.cameraOffset(engine.timeMs);
@@ -266,6 +264,19 @@ export class AttentionScene implements GameScene {
     if (this.assistRemainingMs > 0 && this.phase === "playing") {
       this.drawAssistBanner(ctx);
     }
+  }
+
+  getHudMessage(engine: GameEngine) {
+    return this.headerLine(engine);
+  }
+
+  getHudStats() {
+    return [
+      `Acertos: ${this.correctHits}`,
+      `Erros impulsivos: ${this.impulsiveErrors}`,
+      `Omissões: ${this.omissions}`,
+      `Distrações: ${this.distractionsCollected}`
+    ];
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
@@ -998,30 +1009,6 @@ export class AttentionScene implements GameScene {
       ctx.closePath();
       ctx.fill();
     }
-  }
-
-  private drawStatsCard(ctx: CanvasRenderingContext2D) {
-    drawRoundedRect(ctx, 708, 22, 226, 110, 18);
-    ctx.fillStyle = "rgba(255, 249, 233, 0.92)";
-    ctx.fill();
-    ctx.strokeStyle = "#173b4f";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    const stats = [
-      `Acertos: ${this.correctHits}`,
-      `Erros impulsivos: ${this.impulsiveErrors}`,
-      `Omissões: ${this.omissions}`,
-      `Distrações: ${this.distractionsCollected}`
-    ];
-
-    ctx.fillStyle = "#173b4f";
-    ctx.font = "900 15px Trebuchet MS, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    stats.forEach((line, index) => {
-      ctx.fillText(line, 728, 44 + index * 20);
-    });
   }
 
   private drawTargetCard(ctx: CanvasRenderingContext2D, timeMs: number) {

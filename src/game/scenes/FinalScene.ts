@@ -1,12 +1,5 @@
 import type { GameEngine, GameScene, Platform, PointerPosition } from "@/game/engine/GameEngine";
-import {
-  type ButtonRect,
-  drawCaveBackground,
-  drawPanelText,
-  drawPlatform,
-  drawRoundedRect,
-  pointInRect
-} from "@/game/scenes/sceneUtils";
+import { type ButtonRect, drawCaveBackground, drawPlatform, drawRoundedRect, pointInRect } from "@/game/scenes/sceneUtils";
 import { toTriageDisplayScore } from "@/report/triagePresentation";
 
 export class FinalScene implements GameScene {
@@ -49,13 +42,15 @@ export class FinalScene implements GameScene {
     engine.finishAndOpenReport();
   }
 
+  getHudMessage() {
+    return "Esta experiência possui caráter de triagem lúdica e indicativa.";
+  }
+
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     drawCaveBackground(ctx, engine.timeMs, "#f6c55f");
     for (const platform of this.platforms) {
       drawPlatform(ctx, platform);
     }
-
-    drawPanelText(ctx, "Nave recuperada", "Esta experiência possui caráter de triagem lúdica e indicativa.");
 
     ctx.fillStyle = "rgba(255, 249, 233, 0.92)";
     ctx.beginPath();

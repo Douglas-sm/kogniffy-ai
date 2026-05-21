@@ -141,46 +141,6 @@ function drawPanelShell(ctx: CanvasRenderingContext2D) {
   ctx.fill();
 }
 
-function drawStatusHeader(
-  ctx: CanvasRenderingContext2D,
-  phase: MemoryPhase,
-  currentScore: number,
-  bestSequence: number,
-  sequenceLength: number,
-  flashMs: number,
-  unlockedByHelp: boolean
-) {
-  drawRoundedRect(ctx, 28, 20, 904, 72, 20);
-  ctx.fillStyle = "rgba(6, 14, 25, 0.9)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(73, 246, 255, 0.26)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.fillStyle = "#ebf8ff";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.font = "900 24px Trebuchet MS, sans-serif";
-  ctx.fillText("Nave do Kog", 50, 34);
-  ctx.font = "700 15px Trebuchet MS, sans-serif";
-  ctx.fillStyle = "rgba(194, 228, 255, 0.82)";
-  ctx.fillText(statusTextForPhase(phase, sequenceLength, unlockedByHelp), 50, 62);
-
-  const stats = [
-    `Pontuação atual ${currentScore}`,
-    `Maior sequência ${bestSequence}`,
-    `Flash ${flashMs} ms`
-  ];
-
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 15px Trebuchet MS, sans-serif";
-  ctx.fillStyle = "#49f6ff";
-  stats.forEach((label, index) => {
-    ctx.fillText(label, 908, 34 + index * 15);
-  });
-}
-
 function statusTextForPhase(phase: MemoryPhase, sequenceLength: number, unlockedByHelp: boolean) {
   if (phase === "briefing") {
     return "Painel aguardando sincronização manual.";
@@ -463,7 +423,9 @@ export class MemoryReactionScene implements GameScene {
     );
   }
 
-  update(engine: GameEngine, _dt: number) {
+  update(engine: GameEngine, dt: number) {
+    void dt;
+
     if (engine.dialogBox.isActive) {
       return;
     }
@@ -491,6 +453,7 @@ export class MemoryReactionScene implements GameScene {
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     const shake = this.cameraOffset(engine.timeMs);
+    const sequenceLength = this.currentSequenceLength();
 
     ctx.save();
     ctx.translate(shake.x, shake.y);
@@ -499,30 +462,33 @@ export class MemoryReactionScene implements GameScene {
     drawPanelShell(ctx);
     drawDeckPlatform(ctx);
 
-    const showTimings = showTimingsForSequence(this.sequence.length || 2);
-    drawStatusHeader(
-      ctx,
-      this.phase,
-      this.currentScore,
-      this.bestSequence,
-      Math.max(2, this.sequence.length || 2),
-      showTimings.flashMs,
-      this.unlockedByHelp
-    );
-
     const errorProgress = this.errorProgress(engine.timeMs);
     this.buttonRects.forEach((rect, index) => {
       drawButton(ctx, rect, index, this.buttonIntensity(index, engine.timeMs), errorProgress, engine.timeMs);
     });
 
-    drawProgressRow(ctx, this.phase, this.inputIndex, Math.max(2, this.sequence.length || 2));
-    drawPhaseCaption(ctx, this.phase, this.inputIndex, Math.max(2, this.sequence.length || 2));
+    drawProgressRow(ctx, this.phase, this.inputIndex, sequenceLength);
+    drawPhaseCaption(ctx, this.phase, this.inputIndex, sequenceLength);
 
     if (errorProgress > 0) {
       ctx.fillStyle = `rgba(255, 110, 120, ${0.08 + errorProgress * 0.12})`;
       ctx.fillRect(0, 0, 960, 540);
     }
     ctx.restore();
+  }
+
+  getHudMessage() {
+    return statusTextForPhase(this.phase, this.currentSequenceLength(), this.unlockedByHelp);
+  }
+
+  getHudStats() {
+    const showTimings = showTimingsForSequence(this.sequence.length || 2);
+
+    return [
+      `Pontuação atual ${this.currentScore}`,
+      `Maior sequência ${this.bestSequence}`,
+      `Flash ${showTimings.flashMs} ms`
+    ];
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
@@ -610,6 +576,10 @@ export class MemoryReactionScene implements GameScene {
 
   getCameraOffset(engine: GameEngine): CameraOffset {
     return this.cameraOffset(engine.timeMs);
+  }
+
+  private currentSequenceLength() {
+    return Math.max(2, this.sequence.length || 2);
   }
 
   private cameraOffset(timeMs: number): CameraOffset {

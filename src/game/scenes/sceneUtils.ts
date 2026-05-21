@@ -254,17 +254,3 @@ export function drawChoiceButton(ctx: CanvasRenderingContext2D, rect: ButtonRect
   ctx.textBaseline = "middle";
   ctx.fillText(rect.label, rect.x + rect.width / 2, rect.y + topOffset + rect.height / 2 + 1);
 }
-
-export function drawPanelText(ctx: CanvasRenderingContext2D, title: string, line: string) {
-  drawRoundedRect(ctx, 26, 22, 530, 74, 18);
-  ctx.fillStyle = "rgba(255, 249, 233, 0.9)";
-  ctx.fill();
-  ctx.fillStyle = "#173b4f";
-  ctx.font = "900 24px Trebuchet MS, sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillText(title, 48, 34);
-  ctx.font = "700 16px Trebuchet MS, sans-serif";
-  ctx.fillStyle = "#426171";
-  ctx.fillText(line, 48, 66);
-}

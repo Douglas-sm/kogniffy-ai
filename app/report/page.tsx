@@ -596,11 +596,13 @@ export default function ReportPage() {
       }
     }
 
+    const chartNodes = chartRefs.current;
+
     renderCharts();
 
     return () => {
       active = false;
-      destroyCharts(chartRefs.current);
+      destroyCharts(chartNodes);
     };
   }, [state]);
 

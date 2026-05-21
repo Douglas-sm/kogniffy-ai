@@ -64,6 +64,7 @@ type PackedDot = {
 
 const DIGITS = "0123456789".split("");
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+export const COLORBLIND_CHARACTER_SET = [...DIGITS, ...LETTERS];
 
 const CONFUSABLE_MAP: Record<string, string[]> = {
   "0": ["O", "Q", "8", "6"],

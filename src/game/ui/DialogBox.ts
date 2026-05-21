@@ -1,4 +1,5 @@
 import { drawRoundedRect } from "@/game/scenes/sceneUtils";
+import { wrapTextToLines } from "@/game/ui/textLayout";
 
 export class DialogBox {
   private lines: string[] = [];
@@ -51,34 +52,13 @@ export class DialogBox {
 
     ctx.fillStyle = "#173b4f";
     ctx.font = "800 22px Trebuchet MS, sans-serif";
-    this.wrapText(ctx, this.lines[this.index], 74, 446, 790, 30);
+    wrapTextToLines(ctx, this.lines[this.index], 790).forEach((line, index) => {
+      ctx.fillText(line, 74, 446 + index * 30);
+    });
 
     ctx.fillStyle = "#426171";
     ctx.font = "800 14px Trebuchet MS, sans-serif";
     ctx.textAlign = "right";
     ctx.fillText("Clique ou toque", 884, 476);
-  }
-
-  private wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
-    const words = text.split(" ");
-    let line = "";
-    let currentY = y;
-
-    for (const word of words) {
-      const nextLine = line ? `${line} ${word}` : word;
-      const metrics = ctx.measureText(nextLine);
-
-      if (metrics.width > maxWidth && line) {
-        ctx.fillText(line, x, currentY);
-        line = word;
-        currentY += lineHeight;
-      } else {
-        line = nextLine;
-      }
-    }
-
-    if (line) {
-      ctx.fillText(line, x, currentY);
-    }
   }
 }

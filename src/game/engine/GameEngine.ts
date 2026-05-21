@@ -62,6 +62,8 @@ export interface GameScene {
   onKeyDown?(engine: GameEngine, key: string): void;
   onAutoHelp?(engine: GameEngine): void;
   shouldShowAutoHelpDialog?(engine: GameEngine): boolean;
+  getHudMessage?(engine: GameEngine): string;
+  getHudStats?(engine: GameEngine): string[];
   getCanvasCursor?(engine: GameEngine): string;
   getCameraOffset?(engine: GameEngine): CameraOffset;
   drawPointerOverlay?(engine: GameEngine, ctx: CanvasRenderingContext2D): void;
