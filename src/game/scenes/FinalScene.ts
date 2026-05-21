@@ -7,6 +7,7 @@ import {
   drawPlatform,
   pointInRect
 } from "@/game/scenes/sceneUtils";
+import { toTriageDisplayScore } from "@/report/triagePresentation";
 
 export class FinalScene implements GameScene {
   id = "final";
@@ -28,7 +29,7 @@ export class FinalScene implements GameScene {
   enter(engine: GameEngine) {
     engine.dialogBox.setLines([
       "A travessia terminou.",
-      "O relatório mostra apenas sinais observados durante a experiência.",
+      "O relatório organiza os sinais observados nesta triagem.",
       "Os resultados não representam diagnóstico clínico."
     ]);
   }
@@ -43,7 +44,7 @@ export class FinalScene implements GameScene {
       drawPlatform(ctx, platform);
     }
 
-    drawPanelText(ctx, "Nave recuperada", "Esta experiência possui caráter apenas educativo e indicativo.");
+    drawPanelText(ctx, "Nave recuperada", "Esta experiência possui caráter de triagem lúdica e indicativa.");
 
     ctx.fillStyle = "rgba(255, 249, 233, 0.92)";
     ctx.beginPath();
@@ -59,7 +60,7 @@ export class FinalScene implements GameScene {
     ctx.font = "900 34px Trebuchet MS, sans-serif";
     ctx.fillText("Jornada concluída", 480, 172);
     ctx.font = "800 20px Trebuchet MS, sans-serif";
-    ctx.fillText(`Pontuação geral: ${engine.liveOverallScore()}/100`, 480, 220);
+    ctx.fillText(`Índice geral de triagem: ${toTriageDisplayScore(engine.liveOverallScore())}/100`, 480, 220);
     ctx.fillText(`Tempo total: ${Math.round(engine.metrics.snapshot().totalTimeMs / 1000)}s`, 480, 254);
 
     drawChoiceButton(ctx, this.reportButton, true);

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Kogniffy AI",
-  description: "Plataforma gamificada de triagem cognitiva com resultados educativos e indicativos."
+  description: "Plataforma gamificada de triagem cognitiva com resultados lúdicos, indicativos e não diagnósticos."
 };
 
 export const viewport: Viewport = {

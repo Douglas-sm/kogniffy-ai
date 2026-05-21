@@ -24,7 +24,7 @@ export default function GamePage() {
         </section>
 
         <p className={styles.notice}>
-          Esta experiência possui caráter apenas educativo e indicativo. Os resultados não representam diagnóstico clínico.
+          Esta experiência possui caráter de triagem lúdica e indicativa. Os resultados não representam diagnóstico clínico.
         </p>
       </div>
     </main>

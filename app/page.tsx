@@ -51,10 +51,10 @@ export default function Home() {
             Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e memória em mini-desafios simples.
           </p>
           <p className={styles.copy}>
-            Ao final, o sistema apresenta sinais observados durante a experiência e recomendações em linguagem educativa. O resultado é apenas indicativo e pode apoiar uma conversa com um profissional especializado.
+            Ao final, o sistema organiza os sinais observados durante a experiência em um relatório de triagem com leitura visual, comparações por área e recomendações indicativas.
           </p>
           <div className={styles.notice}>
-            Esta experiência possui caráter apenas educativo e indicativo.
+            Esta experiência possui caráter de triagem lúdica e indicativa.
             <br />
             Os resultados não representam diagnóstico clínico.
           </div>
