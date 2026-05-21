@@ -213,16 +213,18 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   );
   const earlyMissRate = attentionStartSegment ? rate(attentionStartSegment.omissions, attentionStartSegment.targetSpawns) : 0;
   const lateMissRate = attentionEndSegment ? rate(attentionEndSegment.omissions, attentionEndSegment.targetSpawns) : 0;
+  const dyslexiaFirstClickPenalty = clampUnit(Math.max(0, dyslexiaAvgFirstClick - 1200) / 7800) * 14;
+  const dyslexiaResponsePenalty = clampUnit(Math.max(0, dyslexiaAvgResponse - 1000) / 9000) * 18;
 
   const dyslexiaValue =
     dyslexiaPhase.startedWords > 0
-      ? dyslexiaAccuracyPenalty * 26 +
-        dyslexiaCompletionPenalty * 18 +
-        dyslexiaInversionRate * 30 +
-        dyslexiaCorrectionRate * 12 +
-        dyslexiaAutoHelpRate * 18 +
-        dyslexiaAvgFirstClick / 220 +
-        dyslexiaAvgResponse / 240
+      ? dyslexiaAccuracyPenalty * 32 +
+        dyslexiaCompletionPenalty * 20 +
+        dyslexiaInversionRate * 22 +
+        dyslexiaCorrectionRate * 8 +
+        dyslexiaAutoHelpRate * 10 +
+        dyslexiaFirstClickPenalty +
+        dyslexiaResponsePenalty
       : metrics.inversionErrors * 17 +
         metrics.repeatedErrors * 5 +
         metrics.corrections * 4 +

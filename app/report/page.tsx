@@ -335,6 +335,7 @@ export default function ReportPage() {
 
         const resolved = resolveScores({
           heuristicScores,
+          dyslexiaPhase: metrics.dyslexiaPhase,
           dyslexiaPrediction,
           colorVisionRisk: predictedColorVisionRisk,
           attentionPrediction,

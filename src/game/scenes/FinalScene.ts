@@ -139,15 +139,49 @@ export class FinalScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "900 24px Trebuchet MS, sans-serif";
-    ctx.fillText(this.reportButton.label, this.reportButton.x + this.reportButton.width / 2, buttonY + 33);
-    ctx.restore();
 
     if (launching) {
-      ctx.fillStyle = "#173b4f";
-      ctx.font = "800 15px Trebuchet MS, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("IA analisando os dados da sessão...", 480, 414);
+      this.drawButtonLoadingState(ctx, engine, buttonY);
+    } else {
+      ctx.fillText(this.reportButton.label, this.reportButton.x + this.reportButton.width / 2, buttonY + 33);
     }
+
+    ctx.restore();
+
+  }
+
+  private drawButtonLoadingState(ctx: CanvasRenderingContext2D, engine: GameEngine, buttonY: number) {
+    const loadingLabel = "Carregando...";
+    const spinnerRotation = ((engine.timeMs - (this.clickStartedAtMs ?? engine.timeMs)) / 220) * Math.PI * 2;
+    const spinnerRadius = 8;
+    const spinnerDiameter = spinnerRadius * 2;
+    const gap = 12;
+    const centerX = this.reportButton.x + this.reportButton.width / 2;
+    const centerY = buttonY + this.reportButton.height / 2;
+    const labelWidth = ctx.measureText(loadingLabel).width;
+    const totalWidth = spinnerDiameter + gap + labelWidth;
+    const spinnerX = centerX - totalWidth / 2 + spinnerRadius;
+    const labelX = spinnerX + spinnerRadius + gap;
+
+    ctx.save();
+    ctx.translate(spinnerX, centerY);
+    ctx.rotate(spinnerRotation);
+    ctx.lineCap = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(23, 59, 79, 0.24)";
+    ctx.beginPath();
+    ctx.arc(0, 0, spinnerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#173b4f";
+    ctx.beginPath();
+    ctx.arc(0, 0, spinnerRadius, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(loadingLabel, labelX, centerY);
+    ctx.restore();
   }
 }

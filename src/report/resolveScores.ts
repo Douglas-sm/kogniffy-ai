@@ -2,6 +2,7 @@ import type { AttentionPrediction } from "@/ai/adhdModel";
 import type { CognitivePerformancePrediction } from "@/ai/cognitivePerformanceModel";
 import type { DyslexiaPrediction } from "@/ai/dyslexiaModel";
 import type { ReactionTimePrediction } from "@/ai/reactionTimeModel";
+import type { DyslexiaPhaseSnapshot } from "@/metrics/metricsCollector";
 import {
   calculateOverallScore,
   createScore,
@@ -35,6 +36,7 @@ export type ScoreResolutionMap = Record<ScoreKey, ScoreResolution>;
 
 interface ResolveScoresOptions {
   heuristicScores: KogniffyScores;
+  dyslexiaPhase: DyslexiaPhaseSnapshot;
   dyslexiaPrediction?: DyslexiaPrediction | null;
   colorVisionRisk?: number | null;
   attentionPrediction?: AttentionPrediction | null;
@@ -45,6 +47,10 @@ interface ResolveScoresOptions {
 function blendRisk(heuristicRisk: number, modelRisk: number, modelWeight: number) {
   const safeWeight = Math.max(0, Math.min(1, modelWeight));
   return Math.round(heuristicRisk * (1 - safeWeight) + modelRisk * safeWeight);
+}
+
+function rate(numerator: number, denominator: number) {
+  return Math.max(0, numerator) / Math.max(1, denominator);
 }
 
 function withHeuristic(key: ScoreKey, heuristicRisk: number, rationale: string): ScoreResolution {
@@ -92,17 +98,64 @@ function rejectResolution(key: ScoreKey, heuristicRisk: number, modelRisk: numbe
 
 function resolveDyslexiaScore(
   heuristicScore: RiskScore,
-  prediction: DyslexiaPrediction | null | undefined
+  prediction: DyslexiaPrediction | null | undefined,
+  phase: DyslexiaPhaseSnapshot
 ): ScoreResolution {
   if (!prediction) {
     return withHeuristic("dyslexiaRisk", heuristicScore.value, "Modelo indisponível; usando apenas a leitura observada.");
   }
 
+  const heuristicRisk = heuristicScore.value;
+  const modelRisk = prediction.riskScore;
+  const fixtureChecks = prediction.metadataSummary.fixtureChecks;
+
+  if (!fixtureChecks.passed) {
+    return rejectResolution(
+      "dyslexiaRisk",
+      heuristicRisk,
+      modelRisk,
+      "O modelo de leitura reprovou os controles do protocolo e da fase do jogo; mantendo a heurística observada."
+    );
+  }
+
+  const completionRate = rate(phase.completedWords, phase.startedWords);
+  const hitRate = rate(phase.hits, phase.attempts);
+  const strongSession =
+    phase.startedWords > 0 &&
+    completionRate === 1 &&
+    hitRate >= 0.95 &&
+    phase.inversionErrors === 0 &&
+    phase.autoHelpCount === 0;
+
+  if (strongSession && modelRisk < heuristicRisk) {
+    const resolvedRisk = blendRisk(heuristicRisk, modelRisk, 0.45);
+    return acceptResolution(
+      "dyslexiaRisk",
+      heuristicRisk,
+      modelRisk,
+      resolvedRisk,
+      "blended",
+      "Sessão forte na caverna das letras; o modelo foi usado apenas para suavizar um excesso de penalização da heurística."
+    );
+  }
+
+  if (Math.abs(modelRisk - heuristicRisk) <= 25) {
+    const resolvedRisk = blendRisk(heuristicRisk, modelRisk, 0.3);
+    return acceptResolution(
+      "dyslexiaRisk",
+      heuristicRisk,
+      modelRisk,
+      resolvedRisk,
+      "blended",
+      "Leitura final combinando a sessão observada com o modelo de leitura, com peso moderado por compatibilidade calibrada."
+    );
+  }
+
   return rejectResolution(
     "dyslexiaRisk",
-    heuristicScore.value,
-    prediction.riskScore,
-    "O modelo de leitura foi descartado no relatório final porque a atividade atual não replica integralmente o protocolo de treino; prevalece a heurística observada na sessão."
+    heuristicRisk,
+    modelRisk,
+    "A divergência entre heurística e modelo de leitura ficou alta demais para esta sessão; mantendo a leitura observada."
   );
 }
 
@@ -283,7 +336,8 @@ export function resolveScores(options: ResolveScoresOptions) {
   const resolutions: ScoreResolutionMap = {
     dyslexiaRisk: resolveDyslexiaScore(
       options.heuristicScores.dyslexiaRisk,
-      options.dyslexiaPrediction
+      options.dyslexiaPrediction,
+      options.dyslexiaPhase
     ),
     colorVisionRisk: resolveColorVisionScore(
       options.heuristicScores.colorVisionRisk,

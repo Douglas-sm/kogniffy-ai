@@ -34,6 +34,7 @@
   border: 0.14rem solid rgba(255, 249, 233, 0.85);
   border-radius: 999px;
   color: #fff9e9;
+  cursor: pointer;
   font-weight: 900;
   padding: 0.65rem 0.9rem;
 }

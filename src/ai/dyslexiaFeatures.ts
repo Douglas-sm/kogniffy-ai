@@ -6,12 +6,10 @@ export const DYSLEXIA_PHASE_DATASET_QUESTIONS = [
 ] as const;
 
 export const DYSLEXIA_MODEL_FEATURES = [
-  "avgClicksPerQuestion",
-  "avgHitsPerQuestion",
-  "avgMissesPerQuestion",
   "hitRate",
   "missRate",
-  "clicksPerHit",
+  "resolvedRate",
+  "accuracyPerResolved",
   "missesPerHit"
 ] as const;
 
@@ -55,6 +53,8 @@ export interface DyslexiaModelTrainingMetrics {
 export interface DyslexiaFixtureChecks {
   goodControlRisk: number;
   badControlRisk: number;
+  gameGoodControlRisk: number;
+  gameBadControlRisk: number;
   passed: boolean;
 }
 
@@ -82,18 +82,16 @@ function divideByAtLeastOne(numerator: number, denominator: number) {
 }
 
 export function buildDyslexiaFeatureVectorFromAggregate(aggregate: QuestionPerformanceAggregate) {
-  const questionCount = Math.max(1, sanitizeMetric(aggregate.questionCount));
   const totalClicks = sanitizeMetric(aggregate.totalClicks);
   const totalHits = sanitizeMetric(aggregate.totalHits);
   const totalMisses = sanitizeMetric(aggregate.totalMisses);
+  const resolvedAttempts = totalHits + totalMisses;
 
   return [
-    totalClicks / questionCount,
-    totalHits / questionCount,
-    totalMisses / questionCount,
     divideByAtLeastOne(totalHits, totalClicks),
     divideByAtLeastOne(totalMisses, totalClicks),
-    divideByAtLeastOne(totalClicks, totalHits),
+    divideByAtLeastOne(resolvedAttempts, totalClicks),
+    divideByAtLeastOne(totalHits, resolvedAttempts),
     divideByAtLeastOne(totalMisses, totalHits)
   ];
 }

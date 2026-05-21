@@ -418,28 +418,6 @@ function buildDyslexiaDetails(metrics: MetricsSnapshot, options: GenerateReportO
     );
   }
 
-  if (options.dyslexiaPrediction && shouldSurfaceAcceptedModel(resolution)) {
-    details.push(
-      {
-        label: "Mapeamento do risco",
-        value:
-          options.dyslexiaPrediction.outputMode === "oneMinusProbability"
-            ? "1 - probabilidade prevista"
-            : "Probabilidade prevista"
-      },
-      {
-        label: "Checagem de sanidade",
-        value: options.dyslexiaPrediction.metadataSummary.fixtureChecks.passed
-          ? `Aprovada (${options.dyslexiaPrediction.metadataSummary.fixtureChecks.goodControlRisk}/100 bom | ${options.dyslexiaPrediction.metadataSummary.fixtureChecks.badControlRisk}/100 ruim)`
-          : `Reprovada (${options.dyslexiaPrediction.metadataSummary.fixtureChecks.goodControlRisk}/100 bom | ${options.dyslexiaPrediction.metadataSummary.fixtureChecks.badControlRisk}/100 ruim)`
-      },
-      {
-        label: "Treinado em",
-        value: formatDateTime(options.dyslexiaPrediction.metadataSummary.trainedAt)
-      }
-    );
-  }
-
   return details.length > 0 ? details : undefined;
 }
 
@@ -485,10 +463,40 @@ function buildColorEvidence(metrics: MetricsSnapshot) {
   return evidence;
 }
 
+function buildColorPatternDetail(metrics: MetricsSnapshot) {
+  const phase = metrics.colorPhase;
+
+  if (phase.startedTrials === 0) {
+    return "Sem respostas suficientes para destacar um padrão nesta fase.";
+  }
+
+  if (phase.misses > 0) {
+    const groupRates = [
+      { label: "Vermelho/verde", value: missRateForColorGroup(metrics, (trialType) => trialType === "redGreen") },
+      { label: "Azul/amarelo", value: missRateForColorGroup(metrics, (trialType) => trialType === "blueYellow") },
+      { label: "Baixo contraste", value: missRateForColorGroup(metrics, (trialType) => trialType === "lowContrast") }
+    ];
+    const worstGroup = groupRates.reduce((best, group) => (group.value > best.value ? group : best));
+
+    return `${worstGroup.label} concentrou a maior taxa de erro da fase (${percent(worstGroup.value)}).`;
+  }
+
+  if (phase.autoHelpCount > 0) {
+    return `A leitura ficou estável, mas houve ${formatCount(phase.autoHelpCount)} ${phase.autoHelpCount === 1 ? "intervenção" : "intervenções"} de ajuda automática.`;
+  }
+
+  return "Leitura estável nas famílias avaliadas, sem dificuldade dominante nesta sessão.";
+}
+
 function buildColorDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
   const phase = metrics.colorPhase;
   const resolution = options.scoreResolutions?.colorVisionRisk;
-  const details = buildResolutionDetails(resolution);
+  const details = buildResolutionDetails(resolution).filter((detail) => detail.label !== "Decisão final");
+
+  details.push({
+    label: "Padrão da fase",
+    value: buildColorPatternDetail(metrics)
+  });
 
   if (phase.startedTrials > 0) {
     details.push(

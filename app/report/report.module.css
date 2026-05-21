@@ -27,6 +27,7 @@
   border-radius: 999px;
   box-shadow: 0 0.7rem 1.6rem rgba(23, 59, 79, 0.08);
   color: #173b4f;
+  cursor: pointer;
   font-weight: 900;
   padding: 0.82rem 1.1rem;
 }
@@ -459,6 +460,7 @@
   background: #173b4f;
   border-radius: 999px;
   color: #fff9e9;
+  cursor: pointer;
   display: inline-flex;
   font-weight: 900;
   margin-top: 1rem;

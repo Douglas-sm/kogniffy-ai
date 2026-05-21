@@ -128,7 +128,7 @@ export class ColorScene implements GameScene {
     ctx.fillText("Escolha o número escondido:", 592, 164);
     ctx.fillStyle = "#d8e8ef";
     ctx.font = "700 14px Trebuchet MS, sans-serif";
-    ctx.fillText(`Realizada ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
+    ctx.fillText(`Imagem ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
@@ -197,6 +197,24 @@ export class ColorScene implements GameScene {
     engine.metrics.recordColorTrialCompleted();
     engine.clearErrorStreak(this.id);
     this.advanceOrComplete(engine);
+  }
+
+  getCanvasCursor(engine: GameEngine) {
+    const trial = this.currentTrial();
+
+    if (
+      engine.pointer.pointerType !== "mouse" ||
+      !trial ||
+      this.completed ||
+      engine.dialogBox.isActive ||
+      this.waitingForTrialStart ||
+      this.pendingAdvanceAtMs !== null ||
+      this.hasActiveFeedback(engine.timeMs)
+    ) {
+      return "default";
+    }
+
+    return this.optionRects(trial).some((rect) => pointInRect(engine.pointer, rect)) ? "pointer" : "default";
   }
 
   private currentTrial() {

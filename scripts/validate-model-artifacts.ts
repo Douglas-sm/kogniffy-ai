@@ -148,12 +148,32 @@ async function main() {
     totalHits: 12,
     totalMisses: 18
   });
+  const dyslexiaGameGoodVector = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 3,
+    totalClicks: 12,
+    totalHits: 12,
+    totalMisses: 0
+  });
+  const dyslexiaGameBadVector = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 3,
+    totalClicks: 18,
+    totalHits: 8,
+    totalMisses: 6
+  });
   const dyslexiaGoodRisk = toDyslexiaRisk(
     runDenseModel(normalizeFeatureVector(dyslexiaGoodVector, dyslexia.metadata), dyslexia.weights)[0] ?? 0,
     dyslexia.metadata.riskMapping
   );
   const dyslexiaBadRisk = toDyslexiaRisk(
     runDenseModel(normalizeFeatureVector(dyslexiaBadVector, dyslexia.metadata), dyslexia.weights)[0] ?? 0,
+    dyslexia.metadata.riskMapping
+  );
+  const dyslexiaGameGoodRisk = toDyslexiaRisk(
+    runDenseModel(normalizeFeatureVector(dyslexiaGameGoodVector, dyslexia.metadata), dyslexia.weights)[0] ?? 0,
+    dyslexia.metadata.riskMapping
+  );
+  const dyslexiaGameBadRisk = toDyslexiaRisk(
+    runDenseModel(normalizeFeatureVector(dyslexiaGameBadVector, dyslexia.metadata), dyslexia.weights)[0] ?? 0,
     dyslexia.metadata.riskMapping
   );
 
@@ -260,7 +280,10 @@ async function main() {
   );
 
   const checks = {
-    dyslexia: dyslexiaBadRisk > dyslexiaGoodRisk,
+    dyslexia:
+      dyslexiaBadRisk > dyslexiaGoodRisk &&
+      dyslexiaGameBadRisk > dyslexiaGameGoodRisk &&
+      dyslexia.metadata.fixtureChecks.passed,
     colorblind: colorblindBadRisk > colorblindGoodRisk,
     reaction:
       reactionPerformance(reactionGood) > reactionPerformance(reactionAverage) &&
@@ -275,6 +298,8 @@ async function main() {
       riskMapping: dyslexia.metadata.riskMapping,
       goodRisk: dyslexiaGoodRisk,
       badRisk: dyslexiaBadRisk,
+      gameGoodRisk: dyslexiaGameGoodRisk,
+      gameBadRisk: dyslexiaGameBadRisk,
       fixtureChecks: dyslexia.metadata.fixtureChecks
     },
     colorblind: {

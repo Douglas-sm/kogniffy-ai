@@ -1,48 +1,36 @@
 {
   "features": [
-    "avgClicksPerQuestion",
-    "avgHitsPerQuestion",
-    "avgMissesPerQuestion",
     "hitRate",
     "missRate",
-    "clicksPerHit",
+    "resolvedRate",
+    "accuracyPerResolved",
     "missesPerHit"
   ],
   "normalization": [
     {
-      "feature": "avgClicksPerQuestion",
-      "mean": 7.697820216049383,
-      "std": 2.9447324478368637
-    },
-    {
-      "feature": "avgHitsPerQuestion",
-      "mean": 3.5096343449931413,
-      "std": 1.235246314758508
-    },
-    {
-      "feature": "avgMissesPerQuestion",
-      "mean": 1.454250257201646,
-      "std": 1.971397711400128
-    },
-    {
       "feature": "hitRate",
-      "mean": 0.463195685629002,
-      "std": 0.11460285692218256
+      "mean": 0.4634782880310182,
+      "std": 0.11391586160143972
     },
     {
       "feature": "missRate",
-      "mean": 0.1770927962506406,
-      "std": 0.10595764400552561
+      "mean": 0.17734617688626542,
+      "std": 0.10542111165526635
     },
     {
-      "feature": "clicksPerHit",
-      "mean": 2.330458865261767,
-      "std": 0.8300386952433889
+      "feature": "resolvedRate",
+      "mean": 0.6408244649172868,
+      "std": 0.08894337188359058
+    },
+    {
+      "feature": "accuracyPerResolved",
+      "mean": 0.7248694520864251,
+      "std": 0.145452810590222
     },
     {
       "feature": "missesPerHit",
-      "mean": 0.4815406593300996,
-      "std": 0.5925973620011913
+      "mean": 0.47652558576920606,
+      "std": 0.560742752492865
     }
   ],
   "questionIds": [
@@ -85,16 +73,18 @@
     "dyslexia": 392
   },
   "trainingMetrics": {
-    "loss": 0.6060283780097961,
-    "accuracy": 0.6220850348472595,
-    "valLoss": 0.5855914354324341,
-    "valAccuracy": 0.6620879173278809
+    "loss": 0.6380027532577515,
+    "accuracy": 0.7280521392822266,
+    "valLoss": 0.6091842651367188,
+    "valAccuracy": 0.7637362480163574
   },
   "riskMapping": "oneMinusProbability",
   "fixtureChecks": {
-    "goodControlRisk": 8,
-    "badControlRisk": 73,
+    "goodControlRisk": 15,
+    "badControlRisk": 64,
+    "gameGoodControlRisk": 15,
+    "gameBadControlRisk": 54,
     "passed": true
   },
-  "trainedAt": "2026-05-21T04:06:58.410Z"
+  "trainedAt": "2026-05-21T21:37:58.866Z"
 }

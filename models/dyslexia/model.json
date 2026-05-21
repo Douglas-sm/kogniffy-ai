@@ -35,7 +35,7 @@
             "trainable": true,
             "batch_input_shape": [
               null,
-              7
+              5
             ],
             "dtype": "float32"
           }
@@ -110,7 +110,7 @@
         {
           "name": "dense_Dense1/kernel",
           "shape": [
-            7,
+            5,
             12
           ],
           "dtype": "float32"

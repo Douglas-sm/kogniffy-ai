@@ -280,41 +280,77 @@ async function evaluateFixtures(
   model: tfFallback.LayersModel,
   normalization: DyslexiaFeatureNormalization[]
 ) {
-  const goodControl = buildDyslexiaFeatureVectorFromAggregate({
+  const protocolGoodControl = buildDyslexiaFeatureVectorFromAggregate({
     questionCount: 6,
     totalClicks: 24,
     totalHits: 24,
     totalMisses: 0
   });
-  const badControl = buildDyslexiaFeatureVectorFromAggregate({
+  const protocolBadControl = buildDyslexiaFeatureVectorFromAggregate({
     questionCount: 6,
     totalClicks: 48,
     totalHits: 12,
     totalMisses: 18
   });
-  const goodProbability = await predictProbability(tf, model, normalizeFeatureVector(goodControl, normalization));
-  const badProbability = await predictProbability(tf, model, normalizeFeatureVector(badControl, normalization));
+  const gameGoodControl = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 3,
+    totalClicks: 12,
+    totalHits: 12,
+    totalMisses: 0
+  });
+  const gameBadControl = buildDyslexiaFeatureVectorFromAggregate({
+    questionCount: 3,
+    totalClicks: 18,
+    totalHits: 8,
+    totalMisses: 6
+  });
+  const protocolGoodProbability = await predictProbability(
+    tf,
+    model,
+    normalizeFeatureVector(protocolGoodControl, normalization)
+  );
+  const protocolBadProbability = await predictProbability(
+    tf,
+    model,
+    normalizeFeatureVector(protocolBadControl, normalization)
+  );
+  const gameGoodProbability = await predictProbability(tf, model, normalizeFeatureVector(gameGoodControl, normalization));
+  const gameBadProbability = await predictProbability(tf, model, normalizeFeatureVector(gameBadControl, normalization));
 
-  if (goodProbability === null || badProbability === null) {
+  if (
+    protocolGoodProbability === null ||
+    protocolBadProbability === null ||
+    gameGoodProbability === null ||
+    gameBadProbability === null
+  ) {
     return {
       riskMapping: "probability" as const,
       fixtureChecks: {
         goodControlRisk: 0,
         badControlRisk: 0,
+        gameGoodControlRisk: 0,
+        gameBadControlRisk: 0,
         passed: false
       }
     };
   }
 
-  const probabilityGap = badProbability - goodProbability;
-  const invertedGap = (1 - badProbability) - (1 - goodProbability);
+  const probabilityGap =
+    (protocolBadProbability - protocolGoodProbability) + (gameBadProbability - gameGoodProbability);
+  const invertedGap =
+    (1 - protocolBadProbability - (1 - protocolGoodProbability)) +
+    (1 - gameBadProbability - (1 - gameGoodProbability));
   const riskMapping: DyslexiaRiskMapping = probabilityGap >= invertedGap ? "probability" : "oneMinusProbability";
-  const goodControlRisk = toRiskFromProbability(goodProbability, riskMapping);
-  const badControlRisk = toRiskFromProbability(badProbability, riskMapping);
+  const goodControlRisk = toRiskFromProbability(protocolGoodProbability, riskMapping);
+  const badControlRisk = toRiskFromProbability(protocolBadProbability, riskMapping);
+  const gameGoodControlRisk = toRiskFromProbability(gameGoodProbability, riskMapping);
+  const gameBadControlRisk = toRiskFromProbability(gameBadProbability, riskMapping);
   const fixtureChecks: DyslexiaFixtureChecks = {
     goodControlRisk,
     badControlRisk,
-    passed: badControlRisk >= goodControlRisk + 10
+    gameGoodControlRisk,
+    gameBadControlRisk,
+    passed: badControlRisk >= goodControlRisk + 10 && gameBadControlRisk >= gameGoodControlRisk + 20
   };
 
   return {
