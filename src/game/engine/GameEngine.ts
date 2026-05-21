@@ -114,6 +114,7 @@ export class GameEngine {
   private cursorStyle = "default";
   private sceneExitState: "idle" | "opening" | "ready" | "warping" = "idle";
   private sceneExitStartedAt = 0;
+  private portalWalkTargetX: number | null = null;
 
   timeMs = 0;
 
@@ -250,6 +251,7 @@ export class GameEngine {
         !this.dialogBox.isActive &&
         this.sceneExitState !== "warping" &&
         (this.currentScene.isMovementEnabled?.(this) ?? true),
+      moveTowardX: this.portalWalkTargetX,
       freeze: this.sceneExitState === "warping"
     });
     this.currentScene.update(this, dt);
@@ -285,6 +287,7 @@ export class GameEngine {
 
     if (["ArrowLeft", "ArrowRight", "Space"].includes(key)) {
       this.keys.add(key);
+      this.portalWalkTargetX = null;
     }
 
     this.currentScene.onKeyDown?.(this, key);
@@ -312,6 +315,10 @@ export class GameEngine {
       return;
     }
 
+    if (this.handlePortalClick({ x: this.pointer.x, y: this.pointer.y })) {
+      return;
+    }
+
     this.currentScene.onClick?.(this, { x: this.pointer.x, y: this.pointer.y });
   };
 
@@ -324,7 +331,7 @@ export class GameEngine {
   }
 
   private syncCanvasCursor() {
-    const nextCursor = this.currentScene.getCanvasCursor?.(this) ?? "default";
+    const nextCursor = this.isPortalHoverActive() ? "pointer" : (this.currentScene.getCanvasCursor?.(this) ?? "default");
 
     if (nextCursor === this.cursorStyle) {
       return;
@@ -338,6 +345,7 @@ export class GameEngine {
     this.keys.clear();
     this.sceneExitState = this.currentScene.exitMode === "cave" ? "ready" : "idle";
     this.sceneExitStartedAt = 0;
+    this.portalWalkTargetX = null;
 
     const spawn = this.sceneSpawnPosition(this.currentScene.spawnSide);
     this.player.setCheckpoint(spawn.x, spawn.y);
@@ -457,8 +465,60 @@ export class GameEngine {
     }
 
     this.keys.clear();
+    this.portalWalkTargetX = null;
     this.sceneExitState = "warping";
     this.sceneExitStartedAt = this.timeMs;
+  }
+
+  private handlePortalClick(pointer: PointerPosition) {
+    const portalZone = this.currentPortalZone();
+
+    if (!this.isPortalClickable() || !portalZone) {
+      return false;
+    }
+
+    if (!this.pointInRect(this.pointerInScene(pointer), portalZone)) {
+      return false;
+    }
+
+    this.portalWalkTargetX = this.portalTargetX(portalZone);
+    return true;
+  }
+
+  private isPortalHoverActive() {
+    return this.pointer.inside && this.pointer.pointerType === "mouse" && this.handlePortalClickHitTest(this.pointer);
+  }
+
+  private handlePortalClickHitTest(pointer: PointerPosition) {
+    const portalZone = this.currentPortalZone();
+
+    return Boolean(portalZone && this.isPortalClickable() && this.pointInRect(this.pointerInScene(pointer), portalZone));
+  }
+
+  private isPortalClickable() {
+    return this.currentScene.exitMode === "portal" && this.sceneExitState !== "idle" && this.sceneExitState !== "warping";
+  }
+
+  private pointerInScene(pointer: PointerPosition) {
+    const cameraOffset = this.currentScene.getCameraOffset?.(this) ?? { x: 0, y: 0 };
+
+    return {
+      x: pointer.x - cameraOffset.x,
+      y: pointer.y - cameraOffset.y
+    };
+  }
+
+  private pointInRect(point: PointerPosition, rect: Rect) {
+    return (
+      point.x >= rect.x &&
+      point.x <= rect.x + rect.width &&
+      point.y >= rect.y &&
+      point.y <= rect.y + rect.height
+    );
+  }
+
+  private portalTargetX(rect: Rect) {
+    return Math.max(0, Math.min(GAME_WIDTH - this.player.width, rect.x + rect.width / 2 - this.player.width / 2));
   }
 
   private playerTouchesRect(rect: Rect) {

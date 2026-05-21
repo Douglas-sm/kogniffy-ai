@@ -4,6 +4,7 @@ interface PlayerUpdateOptions {
   allowJump: boolean;
   controlsEnabled: boolean;
   freeze: boolean;
+  moveTowardX?: number | null;
 }
 
 export interface PlayerDrawWarpEffect {
@@ -55,14 +56,25 @@ export class Player {
     let landedThisFrame = false;
     let landingSpeed = 0;
 
+    const moveTowardX = options.moveTowardX ?? null;
+    const wantsLeft = options.controlsEnabled && keys.has("ArrowLeft");
+    const wantsRight = options.controlsEnabled && keys.has("ArrowRight");
+    const hasManualHorizontalInput = wantsLeft || wantsRight;
+
     this.velocityX = 0;
 
-    if (options.controlsEnabled && keys.has("ArrowLeft")) {
+    if (wantsLeft && !wantsRight) {
       this.velocityX = -moveSpeed;
-    }
-
-    if (options.controlsEnabled && keys.has("ArrowRight")) {
+    } else if (wantsRight && !wantsLeft) {
       this.velocityX = moveSpeed;
+    } else if (!hasManualHorizontalInput && options.controlsEnabled && moveTowardX !== null) {
+      const distanceToTarget = moveTowardX - this.x;
+
+      if (Math.abs(distanceToTarget) <= 4) {
+        this.x = moveTowardX;
+      } else {
+        this.velocityX = Math.sign(distanceToTarget) * moveSpeed;
+      }
     }
 
     if (this.velocityX !== 0) {

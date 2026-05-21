@@ -185,7 +185,7 @@ export function drawPortalHint(
   rect: Rect,
   timeMs: number,
   revealProgress: number,
-  message = "Vá ao portal para seguir para a próxima fase"
+  message = "Clique no portal ou use as setas para seguir"
 ) {
   const centerX = rect.x + rect.width / 2;
   const cardWidth = 374;

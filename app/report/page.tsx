@@ -33,7 +33,9 @@ const HIDDEN_DETAIL_LABELS = new Set([
   "Base usada",
   "Treinado em",
   "Distribuição da base",
-  "Feature de treino"
+  "Feature de treino",
+  "Proxy",
+  "Proxy comportamental"
 ]);
 
 function colorForValue(value: number) {
