@@ -456,18 +456,34 @@ export class DyslexiaScene implements GameScene {
   }
 
   private drawCurrentLetterPrompt(ctx: CanvasRenderingContext2D) {
+    const message = this.completed
+      ? "As palavras já abriram o portal."
+      : this.pendingAdvance
+        ? "Palavra completa! Prepare a próxima."
+        : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`;
+
+    ctx.save();
     ctx.fillStyle = "#fff9e9";
     ctx.font = "900 24px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(
-      this.completed
-        ? "As palavras já abriram o portal."
-        : this.pendingAdvance
-          ? "Palavra completa! Prepare a próxima."
-          : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`,
-      480,
-      374
-    );
+    const metrics = ctx.measureText(message);
+    const cardPaddingX = 28;
+    const cardPaddingY = 14;
+    const cardWidth = Math.max(360, metrics.width + cardPaddingX * 2);
+    const cardHeight = Math.max(44, metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + cardPaddingY * 2);
+    const cardX = 480 - cardWidth / 2;
+    const cardY = 374 - metrics.actualBoundingBoxAscent - cardPaddingY;
+
+    drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 18);
+    ctx.fillStyle = "rgba(12, 22, 34, 0.68)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 249, 233, 0.16)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff9e9";
+    ctx.fillText(message, 480, 374);
+    ctx.restore();
   }
 
   private drawWordTray(ctx: CanvasRenderingContext2D) {

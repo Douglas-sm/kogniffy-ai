@@ -63,7 +63,7 @@ export class ColorScene implements GameScene {
 
     engine.dialogBox.setLines([
       "O portão usa placas cromáticas para liberar a passagem.",
-      "Agora cada painel esconde apenas números para destravar o caminho.",
+      "Cada painel esconde apenas números para destravar o caminho.",
       "Observe os pontos com calma e escolha entre quatro números."
     ]);
   }

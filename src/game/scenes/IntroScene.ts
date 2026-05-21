@@ -29,7 +29,7 @@ export class IntroScene implements GameScene {
   }
 
   getHudMessage() {
-    return "Siga reto até o buraco da caverna marcado pela seta vermelha.";
+    return "Siga até a entrada da caverna marcado pela seta vermelha.";
   }
 
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {

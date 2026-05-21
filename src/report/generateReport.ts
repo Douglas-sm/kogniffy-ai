@@ -162,18 +162,6 @@ function resolutionSourceLabel(source: ScoreSource) {
   return "Sessão observada";
 }
 
-function resolutionStatusLabel(status: ModelValidationStatus) {
-  if (status === "accepted") {
-    return "Aceito";
-  }
-
-  if (status === "rejected") {
-    return "Rejeitado";
-  }
-
-  return "Indisponível";
-}
-
 function buildResolutionDetails(resolution: ScoreResolution | undefined) {
   if (!resolution) {
     return [];
@@ -183,10 +171,6 @@ function buildResolutionDetails(resolution: ScoreResolution | undefined) {
     {
       label: "Origem do índice",
       value: resolutionSourceLabel(resolution.scoreSource)
-    },
-    {
-      label: "Validação do modelo",
-      value: resolutionStatusLabel(resolution.modelStatus)
     }
   ];
 
