@@ -25,6 +25,12 @@ interface PendingAdvance {
   type: "nextWord" | "completeScene";
 }
 
+interface RacketSwing {
+  startedAtMs: number;
+  targetX: number;
+  targetY: number;
+}
+
 const WORD_BANK = ["bola", "dado", "dedo", "boca", "mapa", "papa", "bala", "pipa", "bota", "pote"];
 const WORDS_PER_ROUND = 3;
 const LETTER_SLOTS = [
@@ -51,6 +57,7 @@ const SIMILAR_GROUPS: Record<string, string[]> = {
 };
 const SIMILAR_PAIRS = new Set(["bd", "db", "pq", "qp", "mn", "nm", "ft", "tf"]);
 const WRONG_FEEDBACK_DURATION_S = 0.3;
+const RACKET_SWING_DURATION_MS = 180;
 const DISTRACTOR_POOL = Array.from(
   new Set([
     ...WORD_BANK.join("").split(""),
@@ -77,6 +84,7 @@ export class DyslexiaScene implements GameScene {
   private targetStartedAt = 0;
   private firstClickRecorded = false;
   private pendingAdvance: PendingAdvance | null = null;
+  private racketSwing: RacketSwing | null = null;
 
   enter(engine: GameEngine) {
     this.completed = false;
@@ -84,6 +92,7 @@ export class DyslexiaScene implements GameScene {
     this.currentLetterIndex = 0;
     this.firstClickRecorded = false;
     this.pendingAdvance = null;
+    this.racketSwing = null;
     this.selectedWords = this.pickWords(WORDS_PER_ROUND);
     this.beginWord(engine, 0);
 
@@ -95,6 +104,10 @@ export class DyslexiaScene implements GameScene {
   }
 
   update(engine: GameEngine, dt: number) {
+    if (this.racketSwing && engine.timeMs - this.racketSwing.startedAtMs >= RACKET_SWING_DURATION_MS) {
+      this.racketSwing = null;
+    }
+
     if (this.completed || engine.dialogBox.isActive) {
       return;
     }
@@ -151,6 +164,7 @@ export class DyslexiaScene implements GameScene {
       return;
     }
 
+    this.startRacketSwing(engine.timeMs, clicked.x, clicked.y);
     const now = performance.now();
     const responseTime = now - this.targetStartedAt;
     engine.metrics.recordAttempt();
@@ -216,10 +230,12 @@ export class DyslexiaScene implements GameScene {
       return;
     }
 
-    const swing = -0.4 + Math.sin(engine.timeMs / 180) * 0.04;
+    const swingProgress = this.swingProgress(engine.timeMs);
+    const swingArc = swingProgress === null ? 0 : Math.sin(swingProgress * Math.PI);
+    const swing = -0.4 + Math.sin(engine.timeMs / 180) * 0.04 + swingArc * 0.96;
 
     ctx.save();
-    ctx.translate(engine.pointer.x, engine.pointer.y);
+    ctx.translate(engine.pointer.x + swingArc * 13, engine.pointer.y - swingArc * 5);
     ctx.rotate(swing);
 
     ctx.strokeStyle = "#173b4f";
@@ -261,6 +277,32 @@ export class DyslexiaScene implements GameScene {
     }
 
     ctx.restore();
+
+    if (this.racketSwing && swingProgress !== null) {
+      const fade = 1 - swingProgress;
+
+      ctx.save();
+      ctx.translate(this.racketSwing.targetX, this.racketSwing.targetY);
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = "#f6c55f";
+      ctx.lineWidth = 4;
+
+      for (let index = 0; index < 6; index += 1) {
+        const angle = (Math.PI * 2 * index) / 6 + 0.15;
+        const inner = 18;
+        const outer = 30 + swingArc * 8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18 + swingArc * 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   private beginWord(engine: GameEngine, wordIndex: number) {
@@ -394,6 +436,22 @@ export class DyslexiaScene implements GameScene {
 
   private triggerWrongFeedback(letter: FlyingLetter) {
     letter.wrongFeedbackTime = WRONG_FEEDBACK_DURATION_S;
+  }
+
+  private startRacketSwing(timeMs: number, targetX: number, targetY: number) {
+    this.racketSwing = {
+      startedAtMs: timeMs,
+      targetX,
+      targetY
+    };
+  }
+
+  private swingProgress(timeMs: number) {
+    if (!this.racketSwing) {
+      return null;
+    }
+
+    return Math.min(1, Math.max(0, (timeMs - this.racketSwing.startedAtMs) / RACKET_SWING_DURATION_MS));
   }
 
   private renderHeaderLine() {

@@ -1053,13 +1053,33 @@ export class AttentionScene implements GameScene {
     ctx.restore();
 
     ctx.fillStyle = "#173b4f";
-    ctx.font = "900 15px Trebuchet MS, sans-serif";
-    ctx.fillText(this.currentRule.shortLabel, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 186);
+    ctx.font = "900 14px Trebuchet MS, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.currentRule.shortLabel, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 181);
 
     const progressPercent = Math.round(this.bridgeProgress * 100);
-    ctx.font = "800 13px Trebuchet MS, sans-serif";
-    ctx.fillStyle = "#426171";
-    ctx.fillText(`Ponte: ${progressPercent}%`, TARGET_CARD.x + TARGET_CARD.width / 2, TARGET_CARD.y + 208);
+    const barX = TARGET_CARD.x + 26;
+    const barY = TARGET_CARD.y + 190;
+    const barWidth = TARGET_CARD.width - 52;
+    const barHeight = 20;
+
+    drawRoundedRect(ctx, barX, barY, barWidth, barHeight, 10);
+    ctx.fillStyle = "rgba(23, 59, 79, 0.1)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(23, 59, 79, 0.28)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (this.bridgeProgress > 0) {
+      const innerWidth = (barWidth - 6) * this.bridgeProgress;
+      drawRoundedRect(ctx, barX + 3, barY + 3, innerWidth, barHeight - 6, 8);
+      ctx.fillStyle = this.currentRule.accent;
+      ctx.fill();
+    }
+
+    ctx.font = "800 12px Trebuchet MS, sans-serif";
+    ctx.fillStyle = "#173b4f";
+    ctx.fillText(`Ponte ${progressPercent}%`, TARGET_CARD.x + TARGET_CARD.width / 2, barY + barHeight / 2 + 1);
   }
 
   private drawRuleBanner(ctx: CanvasRenderingContext2D) {

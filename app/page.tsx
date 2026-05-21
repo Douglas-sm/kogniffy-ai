@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import brandLogo from "../public/images/kogniffyai_logo.webp";
+import { PlayButton } from "@/components/PlayButton";
 import styles from "./page.module.css";
 
 function MountainKogArt() {
@@ -59,10 +59,11 @@ export default function Home() {
             Os resultados não representam diagnóstico clínico.
           </div>
           </section>
-            <Link className={styles.playButton} href="/game" aria-label="Jogar Kogniffy AI">
-                Jogar
-                <span aria-hidden="true">→</span>
-            </Link>
+            <PlayButton
+              className={styles.playButton}
+              href="/game"
+              spinnerClassName={styles.buttonSpinner}
+            />
         </section>
         <div className={styles.scene}>
           <MountainKogArt />

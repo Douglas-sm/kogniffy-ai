@@ -65,8 +65,6 @@ type PackedDot = {
 const DIGITS = "0123456789".split("");
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-export const COLORBLIND_CHARACTER_SET = [...DIGITS, ...LETTERS];
-
 const CONFUSABLE_MAP: Record<string, string[]> = {
   "0": ["O", "Q", "8", "6"],
   "1": ["I", "L", "7", "T"],
@@ -457,25 +455,6 @@ function typeScheduleForCount(count: number, seed: number) {
   return shuffleWithSeed(values.slice(0, count), seed);
 }
 
-function charTypeScheduleForCount(count: number, seed: number) {
-  const values: ColorCharacterType[] = [];
-  let toggle: ColorCharacterType = "digit";
-
-  while (values.length < count) {
-    values.push(toggle);
-    toggle = toggle === "digit" ? "letter" : "digit";
-  }
-
-  const scheduled = values.slice(0, count);
-  const digitCount = Math.ceil(count / 2);
-  const letterCount = Math.floor(count / 2);
-  const balanced = [...new Array(digitCount).fill("digit"), ...new Array(letterCount).fill("letter")] as
-    | ColorCharacterType[]
-    | string[];
-
-  return shuffleWithSeed(balanced as ColorCharacterType[], seed + scheduled.length);
-}
-
 function difficultyScheduleForCount(count: number, seed: number) {
   const base: ColorDifficulty[] = ["medium", "hard", "medium", "hard", "medium", "hard", "expert", "medium"];
   const values: ColorDifficulty[] = [];
@@ -488,10 +467,11 @@ function difficultyScheduleForCount(count: number, seed: number) {
 }
 
 function buildOptions(answer: string, charType: ColorCharacterType, seed: number) {
-  const preferredPool = CONFUSABLE_MAP[answer] ?? [];
+  const preferredPool = (CONFUSABLE_MAP[answer] ?? []).filter((value) =>
+    charType === "digit" ? DIGITS.includes(value) : LETTERS.includes(value)
+  );
   const sameTypePool = charType === "digit" ? DIGITS : LETTERS;
-  const mixedPool = [...preferredPool, ...sameTypePool, ...COLORBLIND_CHARACTER_SET];
-  const distractors = pickDistinctValues(seed, mixedPool, 3, [answer]);
+  const distractors = pickDistinctValues(seed, [...preferredPool, ...sameTypePool], 3, [answer]);
 
   return shuffleWithSeed([answer, ...distractors], seed + 701);
 }
@@ -505,12 +485,13 @@ export function createColorTrialSpec(
   type: ColorPlateType,
   difficulty: ColorDifficulty,
   seed: number,
-  prompt = "Descubra o caractere escondido."
+  prompt?: string
 ) {
   const charType = inferCharacterType(hidden);
+  const resolvedPrompt = prompt ?? (charType === "digit" ? "Descubra o número escondido." : "Descubra o caractere escondido.");
 
   return {
-    prompt,
+    prompt: resolvedPrompt,
     hidden,
     answer: hidden,
     options: buildOptions(hidden, charType, seed + 19),
@@ -524,19 +505,12 @@ export function createColorTrialSpec(
 export function generateColorTrials(count: number, baseSeed: number) {
   const trials: ColorTrialSpec[] = [];
   const types = typeScheduleForCount(count, baseSeed + 11);
-  const charTypes = charTypeScheduleForCount(count, baseSeed + 29);
   const difficulties = difficultyScheduleForCount(count, baseSeed + 47);
   const digits = shuffleWithSeed(DIGITS, baseSeed + 83);
-  const letters = shuffleWithSeed(LETTERS, baseSeed + 107);
   let digitIndex = 0;
-  let letterIndex = 0;
 
   for (let index = 0; index < count; index += 1) {
-    const charType = charTypes[index];
-    const hidden =
-      charType === "digit"
-        ? digits[digitIndex++ % digits.length]
-        : letters[letterIndex++ % letters.length];
+    const hidden = digits[digitIndex++ % digits.length];
     const seed = baseSeed + index * 97 + 13;
 
     trials.push(
@@ -545,12 +519,31 @@ export function generateColorTrials(count: number, baseSeed: number) {
         types[index],
         difficulties[index],
         seed,
-        `Placa ${index + 1} de ${count}. Descubra o caractere escondido.`
+        `Placa ${index + 1} de ${count}. Descubra o número escondido.`
       )
     );
   }
 
   return trials;
+}
+
+function plateDifficultyConfig(trial: ColorTrialSpec) {
+  const base = DIFFICULTY_CONFIG[trial.difficulty];
+
+  if (trial.charType !== "digit") {
+    return base;
+  }
+
+  return {
+    ...base,
+    maxRotation: base.maxRotation * 0.55,
+    maxOffset: base.maxOffset * 0.65,
+    swapChance: base.swapChance * 0.4,
+    edgeDropChance: base.edgeDropChance * 0.45,
+    edgeLeakChance: base.edgeLeakChance * 0.45,
+    speckleChance: base.speckleChance * 0.35,
+    scale: base.scale * 1.18
+  };
 }
 
 function pointToSegmentDistanceSquared(
@@ -612,7 +605,7 @@ function glyphCoverage(strokes: Stroke[], x: number, y: number, thickness: numbe
 
 function buildGlyphSampler(trial: ColorTrialSpec): GlyphSampler {
   const strokes = GLYPH_STROKES[trial.hidden];
-  const config = DIFFICULTY_CONFIG[trial.difficulty];
+  const config = plateDifficultyConfig(trial);
   const random = createSeededRandom(trial.seed + 211);
   const rotation = (random() * 2 - 1) * config.maxRotation;
   const offsetX = (random() * 2 - 1) * config.maxOffset;
@@ -621,9 +614,9 @@ function buildGlyphSampler(trial: ColorTrialSpec): GlyphSampler {
   const sin = Math.sin(rotation);
   const centerX = 14 + offsetX;
   const centerY = 14 + offsetY;
-  const glyphWidth = config.scale * (trial.charType === "digit" ? 5.4 : 6.1);
-  const glyphHeight = config.scale * 7.2;
-  const thickness = trial.charType === "digit" ? 0.13 : 0.12;
+  const glyphWidth = config.scale * (trial.charType === "digit" ? 5.9 : 6.1);
+  const glyphHeight = config.scale * (trial.charType === "digit" ? 7.55 : 7.2);
+  const thickness = trial.charType === "digit" ? 0.155 : 0.12;
 
   return {
     coverageAt: (x: number, y: number) => {
@@ -817,7 +810,7 @@ function hexToRgb(hex: string) {
 }
 
 export function buildIshiharaPlate(trial: ColorTrialSpec): IshiharaPlate {
-  const config = DIFFICULTY_CONFIG[trial.difficulty];
+  const config = plateDifficultyConfig(trial);
   const palette = PALETTES[trial.type];
   const random = createSeededRandom(trial.seed + 389);
   const sampler = buildGlyphSampler(trial);

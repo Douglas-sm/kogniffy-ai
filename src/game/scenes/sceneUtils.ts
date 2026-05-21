@@ -8,6 +8,8 @@ export interface ButtonRect {
   label: string;
 }
 
+export type ChoiceButtonState = "idle" | "correct" | "wrong";
+
 export function pointInRect(point: PointerPosition, rect: ButtonRect) {
   return (
     point.x >= rect.x &&
@@ -214,18 +216,43 @@ export function drawPortalHint(
   drawGoalArrow(ctx, centerX, rect.y - 52, timeMs);
 }
 
-export function drawChoiceButton(ctx: CanvasRenderingContext2D, rect: ButtonRect, active = false) {
-  drawRoundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 14);
-  ctx.fillStyle = active ? "#f6c55f" : "#fff9e9";
+export function drawChoiceButton(ctx: CanvasRenderingContext2D, rect: ButtonRect, state: ChoiceButtonState = "idle") {
+  const pressed = state !== "idle";
+  const topOffset = pressed ? 5 : 0;
+  const shadowOffset = pressed ? 3 : 8;
+  const fillStyle = state === "correct" ? "#d8f3c6" : state === "wrong" ? "#f7c3bd" : "#fff9e9";
+  const shadowStyle = state === "correct" ? "#90c378" : state === "wrong" ? "#cf7669" : "#d9d0c0";
+  const strokeStyle = state === "correct" ? "#2c7746" : state === "wrong" ? "#a93a2c" : "#173b4f";
+  const textStyle = state === "wrong" ? "#7f2318" : "#173b4f";
+
+  drawRoundedRect(ctx, rect.x, rect.y + shadowOffset, rect.width, rect.height, 14);
+  ctx.fillStyle = shadowStyle;
+  ctx.fill();
+
+  drawRoundedRect(ctx, rect.x, rect.y + topOffset, rect.width, rect.height, 14);
+  ctx.fillStyle = fillStyle;
   ctx.fill();
   ctx.lineWidth = 4;
-  ctx.strokeStyle = "#173b4f";
+  ctx.strokeStyle = strokeStyle;
   ctx.stroke();
-  ctx.fillStyle = "#173b4f";
-  ctx.font = "900 24px Trebuchet MS, sans-serif";
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x + 8, rect.y + topOffset + 7, rect.width - 16, 13);
+  ctx.clip();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + 14, rect.y + topOffset + 15);
+  ctx.lineTo(rect.x + rect.width - 14, rect.y + topOffset + 15);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = textStyle;
+  ctx.font = "900 28px Trebuchet MS, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(rect.label, rect.x + rect.width / 2, rect.y + rect.height / 2 + 1);
+  ctx.fillText(rect.label, rect.x + rect.width / 2, rect.y + topOffset + rect.height / 2 + 1);
 }
 
 export function drawPanelText(ctx: CanvasRenderingContext2D, title: string, line: string) {
