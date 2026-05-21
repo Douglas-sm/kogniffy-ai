@@ -128,7 +128,7 @@ export class ColorScene implements GameScene {
     ctx.fillText("Escolha o número escondido:", 592, 164);
     ctx.fillStyle = "#d8e8ef";
     ctx.font = "700 14px Trebuchet MS, sans-serif";
-    ctx.fillText(`Tentativa ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
+    ctx.fillText(`Realizada ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
