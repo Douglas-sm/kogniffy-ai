@@ -15,6 +15,11 @@ const COLUMN_GAP = 20;
 export class Hud {
   draw(ctx: CanvasRenderingContext2D, engine: GameEngine) {
     const scene = engine.currentScene;
+
+    if ((scene.shouldShowHud?.(engine) ?? true) === false) {
+      return;
+    }
+
     const showRightColumn = scene.shouldShowHudRightColumn?.(engine) ?? true;
     const message = scene.getHudMessage?.(engine) ?? scene.objective;
     const stats = showRightColumn ? (scene.getHudStats?.(engine) ?? []).slice(0, 4) : [];

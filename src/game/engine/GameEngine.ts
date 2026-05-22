@@ -61,8 +61,10 @@ export interface GameScene {
   onClick?(engine: GameEngine, pointer: PointerPosition): void;
   onKeyDown?(engine: GameEngine, key: string): void;
   onAutoHelp?(engine: GameEngine): void;
+  shouldShowHud?(engine: GameEngine): boolean;
   shouldShowAutoHelpDialog?(engine: GameEngine): boolean;
   shouldShowHudRightColumn?(engine: GameEngine): boolean;
+  shouldDrawDefaultActors?(engine: GameEngine): boolean;
   getHudMessage?(engine: GameEngine): string;
   getHudStats?(engine: GameEngine): string[];
   getCanvasCursor?(engine: GameEngine): string;
@@ -262,6 +264,7 @@ export class GameEngine {
     this.currentScene.draw(this, this.ctx);
     const warpEffect = this.getWarpEffect();
     const cameraOffset = this.currentScene.getCameraOffset?.(this) ?? null;
+    const shouldDrawDefaultActors = this.currentScene.shouldDrawDefaultActors?.(this) ?? true;
 
     this.ctx.save();
 
@@ -270,8 +273,10 @@ export class GameEngine {
     }
 
     this.drawSceneExit();
-    this.player.draw(this.ctx, this.timeMs, warpEffect);
-    this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs, warpEffect);
+    if (shouldDrawDefaultActors) {
+      this.player.draw(this.ctx, this.timeMs, warpEffect);
+      this.kog.draw(this.ctx, this.player.x, this.player.y, this.timeMs, warpEffect);
+    }
     this.ctx.restore();
     this.hud.draw(this.ctx, this);
     this.dialogBox.draw(this.ctx);
