@@ -377,7 +377,7 @@ export class FinalScene implements GameScene {
 
   private drawSummaryMetric(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, value: string) {
     ctx.save();
-    drawRoundedRect(ctx, x, y, 138, 40, 14);
+    drawRoundedRect(ctx, x, y, 138, 44, 14);
     ctx.fillStyle = "rgba(246, 197, 95, 0.18)";
     ctx.fill();
 
@@ -385,11 +385,11 @@ export class FinalScene implements GameScene {
     ctx.font = "800 13px Trebuchet MS, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(label, x + 14, y + 8);
+    ctx.fillText(label, x + 14, y + 4);
 
     ctx.fillStyle = "#173b4f";
     ctx.font = "900 22px Trebuchet MS, sans-serif";
-    ctx.fillText(value, x + 14, y + 18);
+    ctx.fillText(value, x + 14, y + 19);
     ctx.restore();
   }
 
@@ -632,6 +632,9 @@ export class FinalScene implements GameScene {
   }
 
   private drawRobot(ctx: CanvasRenderingContext2D, robot: RobotPlacement) {
+    const bodyY = -30;
+    const headY = -46;
+    const wheelY = 0;
     const bounce = robot.moving ? Math.sin(robot.driveProgress * Math.PI * 6) * 0.8 : 0;
     const bodyTilt = robot.rotation + (robot.moving ? Math.sin(robot.driveProgress * Math.PI * 4) * 0.015 : 0);
     const wheelRotation = robot.moving ? robot.driveProgress * Math.PI * 7 : 0;
@@ -653,73 +656,73 @@ export class FinalScene implements GameScene {
     ctx.strokeStyle = "#173b4f";
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
-    this.drawRobotSpring(ctx, -12, -20, -4);
-    this.drawRobotSpring(ctx, 12, -20, -4);
+    this.drawRobotSpring(ctx, -12, bodyY + 14, wheelY - 10);
+    this.drawRobotSpring(ctx, 12, bodyY + 14, wheelY - 10);
 
     ctx.fillStyle = "#6f98a8";
     ctx.beginPath();
-    ctx.roundRect(-18, -40, 36, 20, 9);
+    ctx.roundRect(-18, bodyY, 36, 20, 9);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#173b4f";
     ctx.beginPath();
-    ctx.roundRect(-11, -36, 22, 9, 4);
+    ctx.roundRect(-11, bodyY + 4, 22, 9, 4);
     ctx.fill();
 
     ctx.fillStyle = "#6fd6c5";
     ctx.beginPath();
-    ctx.roundRect(-8, -34, 16, 5, 3);
+    ctx.roundRect(-8, bodyY + 6, 16, 5, 3);
     ctx.fill();
 
     ctx.fillStyle = "#d9edf2";
     ctx.beginPath();
-    ctx.roundRect(-14, -56, 28, 18, 7);
+    ctx.roundRect(-14, headY, 28, 18, 7);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#173b4f";
     ctx.beginPath();
-    ctx.roundRect(-10, -52, 20, 7, 3);
+    ctx.roundRect(-10, headY + 4, 20, 7, 3);
     ctx.fill();
 
     ctx.fillStyle = "#6fd6c5";
     ctx.beginPath();
-    ctx.roundRect(-9, -51, 18, 5, 2.5);
+    ctx.roundRect(-9, headY + 5, 18, 5, 2.5);
     ctx.fill();
 
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
-    ctx.arc(4, -48.5, 1.7, 0, Math.PI * 2);
+    ctx.arc(4, headY + 7.5, 1.7, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "#173b4f";
     ctx.beginPath();
-    ctx.moveTo(5, -55);
-    ctx.lineTo(10, -63);
+    ctx.moveTo(5, headY + 1);
+    ctx.lineTo(10, headY - 8);
     ctx.stroke();
 
     ctx.fillStyle = "#dff7f3";
     ctx.beginPath();
-    ctx.arc(10, -63, 3, 0, Math.PI * 2);
+    ctx.arc(10, headY - 8, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(-20, -30);
-    ctx.lineTo(-24, -27);
-    ctx.moveTo(20, -30);
-    ctx.lineTo(24, -27);
+    ctx.moveTo(-20, bodyY + 10);
+    ctx.lineTo(-24, bodyY + 13);
+    ctx.moveTo(20, bodyY + 10);
+    ctx.lineTo(24, bodyY + 13);
     ctx.stroke();
 
     ctx.fillStyle = "#f5c86b";
     ctx.beginPath();
-    ctx.roundRect(-14, -24, 28, 4, 2);
+    ctx.roundRect(-14, bodyY + 16, 28, 4, 2);
     ctx.fill();
 
-    this.drawRobotWheel(ctx, -13, 0, wheelRotation);
-    this.drawRobotWheel(ctx, 13, 0, wheelRotation);
+    this.drawRobotWheel(ctx, -13, wheelY, wheelRotation);
+    this.drawRobotWheel(ctx, 13, wheelY, wheelRotation);
     ctx.restore();
   }
 
@@ -779,7 +782,7 @@ export class FinalScene implements GameScene {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(x, y);
-    ctx.scale(0.62, 0.62);
+    ctx.scale(0.5, 0.5);
 
     ctx.fillStyle = "rgba(111, 214, 197, 0.16)";
     ctx.beginPath();
@@ -850,20 +853,6 @@ export class FinalScene implements GameScene {
     ctx.fillStyle = "rgba(255, 249, 233, 0.14)";
     ctx.beginPath();
     ctx.ellipse(0, -84, 52, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#355869";
-    ctx.beginPath();
-    ctx.moveTo(-66, -6);
-    ctx.lineTo(-94, 22);
-    ctx.lineTo(-52, 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(66, -6);
-    ctx.lineTo(94, 22);
-    ctx.lineTo(52, 10);
-    ctx.closePath();
     ctx.fill();
 
     const hullGradient = ctx.createLinearGradient(-52, -166, 52, 0);
