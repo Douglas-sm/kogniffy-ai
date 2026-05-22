@@ -1,5 +1,6 @@
 import Image from "next/image";
 import brandLogo from "../public/images/kogniffyai_logo.webp";
+import { HomeIntroModal } from "@/components/HomeIntroModal";
 import { PlayButton } from "@/components/PlayButton";
 import styles from "./page.module.css";
 
@@ -34,35 +35,40 @@ function MountainKogArt() {
 export default function Home() {
   return (
     <main className={styles.main}>
+      <HomeIntroModal />
       <div className={styles.shell}>
         <section className={styles.content} aria-labelledby="home-title">
-
-            <Image
-              alt="Kogniffy AI"
-              className={styles.logoImage}
-              priority
-              sizes="(max-width: 860px) 82vw, 520px"
-              src={brandLogo}
-            />
+          <Image
+            alt="Kogniffy AI"
+            className={styles.logoImage}
+            priority
+            sizes="(max-width: 860px) 82vw, 520px"
+            src={brandLogo}
+          />
           <section className={styles.contentText}>
-          <p className={styles.subtitle}>Plataforma gamificada de triagem cognitiva</p>
-          <p className={styles.copy}>
-            Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e memória em mini-desafios simples.
-          </p>
-          <p className={styles.copy}>
-            Ao final, o sistema organiza os sinais observados durante a experiência em um relatório de triagem com leitura visual, comparações por área e recomendações indicativas.
-          </p>
-          <div className={styles.notice}>
-            Esta experiência possui caráter de triagem lúdica e indicativa.
-            <br />
-            Os resultados não representam diagnóstico clínico.
-          </div>
+            <p id="home-title" className={styles.subtitle}>
+              Plataforma gamificada de triagem cognitiva
+            </p>
+            <p className={styles.copy}>
+              Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a
+              atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e
+              memória em mini-desafios simples.
+            </p>
+            <p className={styles.copy}>
+              Ao final, o sistema organiza os sinais observados durante a experiência em um relatório de triagem com
+              leitura visual, comparações por área e recomendações indicativas.
+            </p>
+            <div className={styles.notice}>
+              Esta experiência possui caráter de triagem lúdica e indicativa.
+              <br />
+              Os resultados não representam diagnóstico clínico.
+            </div>
           </section>
-            <PlayButton
-              className={styles.playButton}
-              href="/game"
-              spinnerClassName={styles.buttonSpinner}
-            />
+          <PlayButton
+            className={styles.playButton}
+            href="/game"
+            spinnerClassName={styles.buttonSpinner}
+          />
         </section>
         <div className={styles.scene}>
           <MountainKogArt />
