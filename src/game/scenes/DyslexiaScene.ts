@@ -219,7 +219,7 @@ export class DyslexiaScene implements GameScene {
   }
 
   drawPointerOverlay(engine: GameEngine, ctx: CanvasRenderingContext2D) {
-    if (!engine.pointer.inside || engine.pointer.pointerType !== "mouse") {
+    if (this.completed || !engine.pointer.inside || engine.pointer.pointerType !== "mouse") {
       return;
     }
 
