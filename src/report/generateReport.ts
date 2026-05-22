@@ -17,9 +17,9 @@ import type {
 import {
   triageBandForRisk,
   toTriageDisplayScore,
-  type TriageBand,
-  type TriageBandDefinition
+  type TriageBand
 } from "@/report/triagePresentation";
+import { triageReadingForScore } from "@/report/triageReadings";
 
 export interface ReportCategoryDetail {
   label: string;
@@ -206,22 +206,6 @@ function buildCategoryPresentation(score: RiskScore) {
     displayScore,
     displayBand
   };
-}
-
-function recommendationFromBand(band: TriageBandDefinition) {
-  if (band.key === "needsAttention" || band.key === "attention") {
-    return "Inclua esta área como prioridade em uma triagem complementar e compare o padrão observado com situações do cotidiano.";
-  }
-
-  if (band.key === "regular") {
-    return "Acompanhe esta área em novas sessões de triagem para verificar se o padrão se mantém em diferentes momentos.";
-  }
-
-  return "Use este resultado favorável como referência comparativa nas próximas triagens, sem tratá-lo como conclusão clínica.";
-}
-
-function composeRecommendation(baseText: string, score: RiskScore) {
-  return `${baseText} ${recommendationFromBand(triageBandForRisk(score.value))}`;
 }
 
 function createReportCategory(category: ReportCategoryDraft): ReportCategory {
@@ -853,10 +837,7 @@ export function generateReport(
       scoreSource: options.scoreResolutions?.dyslexiaRisk?.scoreSource ?? "heuristic",
       modelStatus: options.scoreResolutions?.dyslexiaRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Leitura e letras", scores.dyslexiaRisk),
-      recommendation: composeRecommendation(
-        "Observe se trocas entre letras parecidas também aparecem em leituras rápidas, instruções visuais ou momentos de escrita do cotidiano.",
-        scores.dyslexiaRisk
-      ),
+      recommendation: triageReadingForScore("dyslexiaRisk", scores.dyslexiaRisk.value),
       evidence: buildDyslexiaEvidence(metrics),
       details: buildDyslexiaDetails(metrics, options)
     }),
@@ -867,10 +848,7 @@ export function generateReport(
       scoreSource: options.scoreResolutions?.colorVisionRisk?.scoreSource ?? "heuristic",
       modelStatus: options.scoreResolutions?.colorVisionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Cores e contraste", scores.colorVisionRisk),
-      recommendation: composeRecommendation(
-        "Compare os sinais observados com situações reais de identificação de cores, contraste e leitura de estímulos visuais.",
-        scores.colorVisionRisk
-      ),
+      recommendation: triageReadingForScore("colorVisionRisk", scores.colorVisionRisk.value),
       evidence: buildColorEvidence(metrics),
       details: buildColorDetails(metrics, options)
     }),
@@ -881,10 +859,7 @@ export function generateReport(
       scoreSource: options.scoreResolutions?.attentionRisk?.scoreSource ?? "heuristic",
       modelStatus: options.scoreResolutions?.attentionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Atenção", scores.attentionRisk),
-      recommendation: composeRecommendation(
-        "Registre se respostas impulsivas, perda de estímulos ou demora para retomar a regra aparecem em outros contextos da rotina.",
-        scores.attentionRisk
-      ),
+      recommendation: triageReadingForScore("attentionRisk", scores.attentionRisk.value),
       evidence: buildAttentionEvidence(metrics, options),
       details: buildAttentionDetails(metrics, options)
     }),
@@ -895,10 +870,7 @@ export function generateReport(
       scoreSource: options.scoreResolutions?.memoryReactionRisk?.scoreSource ?? "heuristic",
       modelStatus: options.scoreResolutions?.memoryReactionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Memória/Reação", scores.memoryReactionRisk),
-      recommendation: composeRecommendation(
-        "Repita a fase em momentos diferentes para comparar se lentidão, quebra de sequência ou impulsividade continuam aparecendo.",
-        scores.memoryReactionRisk
-      ),
+      recommendation: triageReadingForScore("memoryReactionRisk", scores.memoryReactionRisk.value),
       evidence: buildMemoryEvidence(metrics, options),
       details: buildMemoryDetails(metrics, options)
     }),
@@ -909,10 +881,7 @@ export function generateReport(
       scoreSource: options.scoreResolutions?.cognitivePerformanceRisk?.scoreSource ?? "heuristic",
       modelStatus: options.scoreResolutions?.cognitivePerformanceRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Desempenho cognitivo", scores.cognitivePerformanceRisk),
-      recommendation: composeRecommendation(
-        "Observe se velocidade, memória de trabalho e impulsividade se repetem fora do jogo antes de interpretar este padrão de forma mais ampla.",
-        scores.cognitivePerformanceRisk
-      ),
+      recommendation: triageReadingForScore("cognitivePerformanceRisk", scores.cognitivePerformanceRisk.value),
       evidence: buildCognitivePerformanceEvidence(metrics, options.cognitivePerformancePrediction, options),
       details: buildCognitivePerformanceDetails(metrics, options.cognitivePerformancePrediction, options)
     })

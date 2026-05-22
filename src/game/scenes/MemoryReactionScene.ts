@@ -482,13 +482,7 @@ export class MemoryReactionScene implements GameScene {
   }
 
   getHudStats() {
-    const showTimings = showTimingsForSequence(this.sequence.length || 2);
-
-    return [
-      `Pontuação atual ${this.currentScore}`,
-      `Maior sequência ${this.bestSequence}`,
-      `Flash ${showTimings.flashMs} ms`
-    ];
+    return [];
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
