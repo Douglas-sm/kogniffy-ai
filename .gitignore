@@ -11,7 +11,6 @@ coverage
 *.tsbuildinfo
 # Runtime model assets under models/ are versioned for app/report inference.
 # Only local-only training outputs and datasets stay ignored.
-models/kogniffy/*.bin
 models/kogniffy/model.json
 models/kogniffy/normalization.json
 models/colorblind/dataset-metadata.json
@@ -20,9 +19,3 @@ models/colorblind/dataset/**
 models/colorblind/manifests/**
 /.idea
 /data
-
-models/cognitiveperformance/group1-shard1of1.bin
-
-models/dyslexia/group1-shard1of1.bin
-
-models/colorblind/group1-shard1of1.bin
