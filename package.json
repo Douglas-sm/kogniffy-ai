@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
+    "@vercel/analytics": "^2.0.1",
     "chart.js": "^4.4.7",
     "next": "^15.0.0",
     "react": "^19.0.0",
