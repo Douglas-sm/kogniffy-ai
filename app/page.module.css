@@ -89,12 +89,15 @@
   border-radius: 999px;
   box-shadow: 0 1rem 0 #b74c3c, 0 0.5rem 0.5rem rgba(44, 49, 55, 0.24);
   color: #fff9e9;
+  cursor: pointer;
   display: inline-flex;
   font-size: 1.25rem;
   font-weight: 900;
   gap: 0.7rem;
+  justify-content: center;
   letter-spacing: 0;
   margin: 1rem auto 0 auto;
+  min-width: 12.6rem;
   padding: 1.05rem 1.8rem;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
@@ -107,6 +110,21 @@
 .playButton:focus-visible {
   outline: 0.25rem solid #173b4f;
   outline-offset: 0.25rem;
+}
+
+.playButton:disabled {
+  box-shadow: 0 0.55rem 0 #b74c3c, 0 0.5rem 1rem rgba(44, 49, 55, 0.18);
+  cursor: progress;
+  transform: translateY(0.42rem);
+}
+
+.buttonSpinner {
+  animation: spin 0.8s linear infinite;
+  border: 0.2rem solid rgba(255, 249, 233, 0.32);
+  border-radius: 50%;
+  border-top-color: #fff9e9;
+  height: 1.05rem;
+  width: 1.05rem;
 }
 
 .scene {

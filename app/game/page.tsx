@@ -18,13 +18,13 @@ export default function GamePage() {
         </section>
 
         <section className={styles.help} aria-label="Controles">
-          <div className={styles.helpItem}>Setas: mover o robô</div>
-          <div className={styles.helpItem}>Encoste nos cristais corretos durante a fase de atenção</div>
+          <div className={styles.helpItem}>Setas: mover o robô quando o caminho estiver liberado</div>
+          <div className={styles.helpItem}>Clique/toque: capturar cristais na fase de atenção</div>
           <div className={styles.helpItem}>Clique/toque: avançar falas e usar painéis</div>
         </section>
 
         <p className={styles.notice}>
-          Esta experiência possui caráter apenas educativo e indicativo. Os resultados não representam diagnóstico clínico.
+          Esta experiência possui caráter de triagem lúdica e indicativa. Os resultados não representam diagnóstico clínico.
         </p>
       </div>
     </main>

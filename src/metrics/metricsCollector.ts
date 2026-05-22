@@ -620,7 +620,7 @@ export class MetricsCollector {
   }
 
   get elapsedMs() {
-    return Date.now() - this.data.startedAt;
+    return this.data.completedAt ? this.data.totalTimeMs : Date.now() - this.data.startedAt;
   }
 
   recordResponseTime(ms: number) {
@@ -975,6 +975,10 @@ export class MetricsCollector {
   }
 
   finalize() {
+    if (this.data.completedAt) {
+      return this.snapshot();
+    }
+
     this.data.completedAt = Date.now();
     this.data.totalTimeMs = this.data.completedAt - this.data.startedAt;
     return this.snapshot();

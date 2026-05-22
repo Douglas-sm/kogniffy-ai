@@ -9,23 +9,20 @@ dist
 *.log
 coverage
 *.tsbuildinfo
+# Runtime model assets under models/ are versioned for app/report inference.
+# Only local-only training outputs and datasets stay ignored.
 models/kogniffy/*.bin
 models/kogniffy/model.json
 models/kogniffy/normalization.json
-models/dyslexia/*.bin
-models/dyslexia/model.json
-models/dyslexia/normalization.json
-models/colorblind/*.bin
-models/colorblind/model.json
-models/colorblind/normalization.json
-models/colorblind/metadata.json
 models/colorblind/dataset-metadata.json
 models/colorblind/sessions.csv
 models/colorblind/dataset/**
 models/colorblind/manifests/**
-models/cognitiveperformance/*.bin
-models/cognitiveperformance/model.json
-models/cognitiveperformance/normalization.json
-models/cognitiveperformance/metadata.json
 /.idea
 /data
+
+models/cognitiveperformance/group1-shard1of1.bin
+
+models/dyslexia/group1-shard1of1.bin
+
+models/colorblind/group1-shard1of1.bin

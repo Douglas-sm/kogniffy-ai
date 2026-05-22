@@ -1,6 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import brandLogo from "../public/images/kogniffyai_logo.webp";
+import { HomeIntroModal } from "@/components/HomeIntroModal";
+import { PlayButton } from "@/components/PlayButton";
 import styles from "./page.module.css";
 
 function MountainKogArt() {
@@ -26,7 +27,6 @@ function MountainKogArt() {
         <circle cx="252" cy="114" r="15" fill="#6fd6c5" />
         <circle cx="258" cy="108" r="5" fill="#fff" />
         <path d="M205 139l-31 24m125-24l31 24" stroke="#173b4f" strokeLinecap="round" strokeWidth="9" />
-        <path d="M222 168l-12 27m72-27l12 27" stroke="#f06f59" strokeLinecap="round" strokeWidth="10" />
       </g>
     </svg>
   );
@@ -35,34 +35,38 @@ function MountainKogArt() {
 export default function Home() {
   return (
     <main className={styles.main}>
+      <HomeIntroModal />
       <div className={styles.shell}>
         <section className={styles.content} aria-labelledby="home-title">
-
-            <Image
-              alt="Kogniffy AI"
-              className={styles.logoImage}
-              priority
-              sizes="(max-width: 860px) 82vw, 520px"
-              src={brandLogo}
-            />
+          <Image
+            alt="Kogniffy AI"
+            className={styles.logoImage}
+            priority
+            sizes="(max-width: 860px) 82vw, 520px"
+            src={brandLogo}
+          />
           <section className={styles.contentText}>
-          <p className={styles.subtitle}>Plataforma gamificada de triagem cognitiva</p>
-          <p className={styles.copy}>
-            Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e memória em mini-desafios simples.
-          </p>
-          <p className={styles.copy}>
-            Ao final, o sistema apresenta sinais observados durante a experiência e recomendações em linguagem educativa. O resultado é apenas indicativo e pode apoiar uma conversa com um profissional especializado.
-          </p>
-          <div className={styles.notice}>
-            Esta experiência possui caráter apenas educativo e indicativo.
-            <br />
-            Os resultados não representam diagnóstico clínico.
-          </div>
+            <p id="home-title" className={styles.subtitle}>
+                Plataforma Gamificada de Triagem Cognitiva
+            </p>
+            <p className={styles.copy}>
+                Acompanhe Kog em uma aventura interativa desenvolvida para explorar habilidades relacionadas à atenção, memória, leitura, percepção visual e tempo de reação. Por meio de mini desafios lúdicos, a plataforma coleta métricas comportamentais e utiliza Inteligência Artificial para identificar possíveis pontos de atenção.
+            </p>
+            <p className={styles.copy}>
+              Ao final, o sistema organiza os sinais observados durante a experiência em um relatório de triagem com
+              leitura visual, comparações por área e recomendações indicativas.
+            </p>
+            <div className={styles.notice}>
+              Esta experiência possui caráter de triagem lúdica e indicativa.
+              <br />
+              Os resultados não representam diagnóstico clínico.
+            </div>
           </section>
-            <Link className={styles.playButton} href="/game" aria-label="Jogar Kogniffy AI">
-                Jogar
-                <span aria-hidden="true">→</span>
-            </Link>
+          <PlayButton
+            className={styles.playButton}
+            href="/game"
+            spinnerClassName={styles.buttonSpinner}
+          />
         </section>
         <div className={styles.scene}>
           <MountainKogArt />

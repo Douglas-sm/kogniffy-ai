@@ -1,5 +1,6 @@
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
 import { calculateCognitivePerformanceFallbackRisk } from "@/ai/cognitivePerformanceFeatures";
+import { buildReactionTimeProxySnapshot } from "@/ai/reactionTimeFeatures";
 
 export type RiskBand = "baixo" | "intermediario" | "alto";
 
@@ -26,6 +27,7 @@ const SCORE_KEYS = [
 ] as const;
 
 type ScoreKey = (typeof SCORE_KEYS)[number];
+const MEMORY_REACTION_TARGET_SEQUENCE = 6;
 
 export function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -50,6 +52,10 @@ function variance(values: number[]) {
 
 function rate(numerator: number, denominator: number) {
   return Math.max(0, numerator) / Math.max(1, denominator);
+}
+
+function clampUnit(value: number) {
+  return Math.max(0, Math.min(1, value));
 }
 
 function missRateFromResponses(
@@ -124,14 +130,50 @@ export function overrideAttentionRisk(scores: KogniffyScores, value: number): Ko
   return overrideRiskScore(scores, "attentionRisk", value);
 }
 
+export function overrideMemoryReactionRisk(scores: KogniffyScores, value: number): KogniffyScores {
+  return overrideRiskScore(scores, "memoryReactionRisk", value);
+}
+
 export function overrideCognitivePerformanceRisk(scores: KogniffyScores, value: number): KogniffyScores {
   return overrideRiskScore(scores, "cognitivePerformanceRisk", value);
+}
+
+export function calculateMemoryReactionHeuristicRisk(metrics: MetricsSnapshot) {
+  const snapshot = buildReactionTimeProxySnapshot(metrics);
+  const sequenceSpanPenalty = clampUnit(
+    Math.max(0, MEMORY_REACTION_TARGET_SEQUENCE - snapshot.maxSequenceReached) / MEMORY_REACTION_TARGET_SEQUENCE
+  );
+  const errorRate = clampUnit(snapshot.errorCount / Math.max(1, snapshot.roundsPlayed));
+  const impulsivityPenalty = clampUnit(snapshot.impulsivityCount / Math.max(1, snapshot.roundsPlayed));
+  const consistencyPenalty = clampUnit(snapshot.reactionStdMs / 220);
+  const fatiguePenalty = clampUnit(Math.max(0, snapshot.fatigueDeltaMs) / 180);
+
+  return clampScore(
+    100 *
+      (0.4 * sequenceSpanPenalty +
+        0.3 * errorRate +
+        0.1 * impulsivityPenalty +
+        0.1 * consistencyPenalty +
+        0.1 * fatiguePenalty)
+  );
+}
+
+export function calculateMemoryReactionCompositeRisk(reactionRiskScore: number, memoryHeuristicRisk: number) {
+  return clampScore(0.5 * clampScore(reactionRiskScore) + 0.5 * clampScore(memoryHeuristicRisk));
 }
 
 export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   const avgResponse = average(metrics.responseTimes);
   const avgHesitation = average(metrics.hesitationTimes);
   const avgFirstClick = average(metrics.firstClickTimes);
+  const dyslexiaPhase = metrics.dyslexiaPhase;
+  const dyslexiaAvgResponse = average(dyslexiaPhase.responseTimes);
+  const dyslexiaAvgFirstClick = average(dyslexiaPhase.firstClickTimes);
+  const dyslexiaAccuracyPenalty = 1 - rate(dyslexiaPhase.hits, dyslexiaPhase.attempts);
+  const dyslexiaCompletionPenalty = 1 - rate(dyslexiaPhase.completedWords, dyslexiaPhase.startedWords);
+  const dyslexiaInversionRate = rate(dyslexiaPhase.inversionErrors, dyslexiaPhase.attempts);
+  const dyslexiaCorrectionRate = rate(dyslexiaPhase.corrections, dyslexiaPhase.attempts);
+  const dyslexiaAutoHelpRate = rate(dyslexiaPhase.autoHelpCount, dyslexiaPhase.startedWords);
   const colorAvgResponse = average(metrics.colorPhase.responseTimes);
   const colorResponseDeviation = Math.sqrt(variance(metrics.colorPhase.responseTimes));
   const redGreenMissRate = missRateFromResponses(metrics, (response) => response.trialType === "redGreen");
@@ -171,14 +213,24 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
   );
   const earlyMissRate = attentionStartSegment ? rate(attentionStartSegment.omissions, attentionStartSegment.targetSpawns) : 0;
   const lateMissRate = attentionEndSegment ? rate(attentionEndSegment.omissions, attentionEndSegment.targetSpawns) : 0;
+  const dyslexiaFirstClickPenalty = clampUnit(Math.max(0, dyslexiaAvgFirstClick - 1200) / 7800) * 14;
+  const dyslexiaResponsePenalty = clampUnit(Math.max(0, dyslexiaAvgResponse - 1000) / 9000) * 18;
 
   const dyslexiaValue =
-    metrics.inversionErrors * 17 +
-    metrics.repeatedErrors * 5 +
-    metrics.corrections * 4 +
-    avgHesitation / 120 +
-    avgFirstClick / 160 +
-    avgResponse / 180;
+    dyslexiaPhase.startedWords > 0
+      ? dyslexiaAccuracyPenalty * 32 +
+        dyslexiaCompletionPenalty * 20 +
+        dyslexiaInversionRate * 22 +
+        dyslexiaCorrectionRate * 8 +
+        dyslexiaAutoHelpRate * 10 +
+        dyslexiaFirstClickPenalty +
+        dyslexiaResponsePenalty
+      : metrics.inversionErrors * 17 +
+        metrics.repeatedErrors * 5 +
+        metrics.corrections * 4 +
+        avgHesitation / 120 +
+        avgFirstClick / 160 +
+        avgResponse / 180;
 
   const colorVisionValue =
     metrics.colorPhase.startedTrials > 0
@@ -213,17 +265,10 @@ export function calculateScores(metrics: MetricsSnapshot): KogniffyScores {
         average(metrics.reactionTimes) / 220 +
         metrics.repeatedErrors * 3;
 
-  const rememberedBonus = Math.max(0, 6 - metrics.maxSequenceLength) * 9;
-  const memoryValue =
-    metrics.sequenceErrors * 14 +
-    rememberedBonus +
-    Math.max(0, 5 - metrics.sequenceScore) * 6 +
-    average(metrics.reactionTimes) / 260;
-
   const dyslexiaRisk = createScore(dyslexiaValue);
   const colorVisionRisk = createScore(colorVisionValue);
   const attentionRisk = createScore(attentionValue);
-  const memoryReactionRisk = createScore(memoryValue);
+  const memoryReactionRisk = createScore(calculateMemoryReactionHeuristicRisk(metrics));
   const cognitivePerformanceRisk = createScore(calculateCognitivePerformanceFallbackRisk(metrics));
   const overallScore = calculateOverallScore([
     dyslexiaRisk.value,

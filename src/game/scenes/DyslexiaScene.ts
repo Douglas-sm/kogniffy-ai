@@ -1,10 +1,5 @@
 import type { GameEngine, GameScene, Platform, PointerPosition } from "@/game/engine/GameEngine";
-import {
-  drawCaveBackground,
-  drawPanelText,
-  drawPlatform,
-  drawRoundedRect
-} from "@/game/scenes/sceneUtils";
+import { drawCaveBackground, drawPlatform, drawRoundedRect } from "@/game/scenes/sceneUtils";
 
 interface FlyingLetter {
   char: string;
@@ -23,6 +18,12 @@ interface FlyingLetter {
 interface PendingAdvance {
   atMs: number;
   type: "nextWord" | "completeScene";
+}
+
+interface RacketSwing {
+  startedAtMs: number;
+  targetX: number;
+  targetY: number;
 }
 
 const WORD_BANK = ["bola", "dado", "dedo", "boca", "mapa", "papa", "bala", "pipa", "bota", "pote"];
@@ -51,6 +52,7 @@ const SIMILAR_GROUPS: Record<string, string[]> = {
 };
 const SIMILAR_PAIRS = new Set(["bd", "db", "pq", "qp", "mn", "nm", "ft", "tf"]);
 const WRONG_FEEDBACK_DURATION_S = 0.3;
+const RACKET_SWING_DURATION_MS = 180;
 const DISTRACTOR_POOL = Array.from(
   new Set([
     ...WORD_BANK.join("").split(""),
@@ -77,6 +79,7 @@ export class DyslexiaScene implements GameScene {
   private targetStartedAt = 0;
   private firstClickRecorded = false;
   private pendingAdvance: PendingAdvance | null = null;
+  private racketSwing: RacketSwing | null = null;
 
   enter(engine: GameEngine) {
     this.completed = false;
@@ -84,6 +87,7 @@ export class DyslexiaScene implements GameScene {
     this.currentLetterIndex = 0;
     this.firstClickRecorded = false;
     this.pendingAdvance = null;
+    this.racketSwing = null;
     this.selectedWords = this.pickWords(WORDS_PER_ROUND);
     this.beginWord(engine, 0);
 
@@ -95,6 +99,10 @@ export class DyslexiaScene implements GameScene {
   }
 
   update(engine: GameEngine, dt: number) {
+    if (this.racketSwing && engine.timeMs - this.racketSwing.startedAtMs >= RACKET_SWING_DURATION_MS) {
+      this.racketSwing = null;
+    }
+
     if (this.completed || engine.dialogBox.isActive) {
       return;
     }
@@ -126,12 +134,6 @@ export class DyslexiaScene implements GameScene {
       drawPlatform(ctx, platform);
     }
 
-    drawPanelText(
-      ctx,
-      "Letras mágicas",
-      this.completed ? "Portal aberto no centro. Leve o robô até ele para continuar." : this.renderHeaderLine()
-    );
-
     for (const letter of this.letters) {
       this.drawFlyingLetter(ctx, letter, engine.timeMs);
     }
@@ -151,6 +153,7 @@ export class DyslexiaScene implements GameScene {
       return;
     }
 
+    this.startRacketSwing(engine.timeMs, clicked.x, clicked.y);
     const now = performance.now();
     const responseTime = now - this.targetStartedAt;
     engine.metrics.recordAttempt();
@@ -203,6 +206,10 @@ export class DyslexiaScene implements GameScene {
     this.complete(engine);
   }
 
+  getHudMessage() {
+    return this.completed ? "Portal aberto no centro. Leve o robô até ele para continuar." : this.renderHeaderLine();
+  }
+
   getCanvasCursor(engine: GameEngine) {
     if (this.completed) {
       return "default";
@@ -216,10 +223,12 @@ export class DyslexiaScene implements GameScene {
       return;
     }
 
-    const swing = -0.4 + Math.sin(engine.timeMs / 180) * 0.04;
+    const swingProgress = this.swingProgress(engine.timeMs);
+    const swingArc = swingProgress === null ? 0 : Math.sin(swingProgress * Math.PI);
+    const swing = -0.4 + Math.sin(engine.timeMs / 180) * 0.04 + swingArc * 0.96;
 
     ctx.save();
-    ctx.translate(engine.pointer.x, engine.pointer.y);
+    ctx.translate(engine.pointer.x + swingArc * 13, engine.pointer.y - swingArc * 5);
     ctx.rotate(swing);
 
     ctx.strokeStyle = "#173b4f";
@@ -261,6 +270,32 @@ export class DyslexiaScene implements GameScene {
     }
 
     ctx.restore();
+
+    if (this.racketSwing && swingProgress !== null) {
+      const fade = 1 - swingProgress;
+
+      ctx.save();
+      ctx.translate(this.racketSwing.targetX, this.racketSwing.targetY);
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = "#f6c55f";
+      ctx.lineWidth = 4;
+
+      for (let index = 0; index < 6; index += 1) {
+        const angle = (Math.PI * 2 * index) / 6 + 0.15;
+        const inner = 18;
+        const outer = 30 + swingArc * 8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18 + swingArc * 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   private beginWord(engine: GameEngine, wordIndex: number) {
@@ -396,6 +431,22 @@ export class DyslexiaScene implements GameScene {
     letter.wrongFeedbackTime = WRONG_FEEDBACK_DURATION_S;
   }
 
+  private startRacketSwing(timeMs: number, targetX: number, targetY: number) {
+    this.racketSwing = {
+      startedAtMs: timeMs,
+      targetX,
+      targetY
+    };
+  }
+
+  private swingProgress(timeMs: number) {
+    if (!this.racketSwing) {
+      return null;
+    }
+
+    return Math.min(1, Math.max(0, (timeMs - this.racketSwing.startedAtMs) / RACKET_SWING_DURATION_MS));
+  }
+
   private renderHeaderLine() {
     if (this.pendingAdvance) {
       return `Forme as palavras • Palavra ${this.currentWordIndex + 1} de ${this.selectedWords.length} concluída`;
@@ -405,18 +456,34 @@ export class DyslexiaScene implements GameScene {
   }
 
   private drawCurrentLetterPrompt(ctx: CanvasRenderingContext2D) {
+    const message = this.completed
+      ? "As palavras já abriram o portal."
+      : this.pendingAdvance
+        ? "Palavra completa! Prepare a próxima."
+        : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`;
+
+    ctx.save();
     ctx.fillStyle = "#fff9e9";
     ctx.font = "900 24px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(
-      this.completed
-        ? "As palavras já abriram o portal."
-        : this.pendingAdvance
-          ? "Palavra completa! Prepare a próxima."
-          : `Toque na próxima letra: ${this.currentWord()[this.currentLetterIndex] ?? "ok"}`,
-      480,
-      374
-    );
+    const metrics = ctx.measureText(message);
+    const cardPaddingX = 28;
+    const cardPaddingY = 14;
+    const cardWidth = Math.max(360, metrics.width + cardPaddingX * 2);
+    const cardHeight = Math.max(44, metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + cardPaddingY * 2);
+    const cardX = 480 - cardWidth / 2;
+    const cardY = 374 - metrics.actualBoundingBoxAscent - cardPaddingY;
+
+    drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 18);
+    ctx.fillStyle = "rgba(12, 22, 34, 0.68)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 249, 233, 0.16)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff9e9";
+    ctx.fillText(message, 480, 374);
+    ctx.restore();
   }
 
   private drawWordTray(ctx: CanvasRenderingContext2D) {

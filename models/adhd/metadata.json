@@ -8,23 +8,23 @@
   "normalization": [
     {
       "feature": "sustainedAttentionPenalty",
-      "mean": 0.4932180514983133,
-      "std": 0.149695312861438
+      "mean": 0.49332516952051375,
+      "std": 0.14980115673011485
     },
     {
       "feature": "impulsivityPenalty",
-      "mean": 0.4846410420003294,
-      "std": 0.1460262794773919
+      "mean": 0.48472066104515094,
+      "std": 0.1441908707281589
     },
     {
       "feature": "distractibilityPenalty",
-      "mean": 0.4877916449348152,
-      "std": 0.15898877218127214
+      "mean": 0.48810556318983106,
+      "std": 0.1598971689240646
     },
     {
       "feature": "adaptationPenalty",
-      "mean": 0.48864722594261134,
-      "std": 0.16179004832658567
+      "mean": 0.48858641229709543,
+      "std": 0.16239144713174394
     }
   ],
   "sourceDataset": "EEG Dataset for ADHD",
@@ -41,10 +41,10 @@
     "adhd": 61
   },
   "trainingMetrics": {
-    "loss": 0.622246503829956,
-    "accuracy": 0.6585809588432312,
-    "valLoss": 0.6451573371887207,
-    "valAccuracy": 0.6642156839370728
+    "loss": 0.6247810125350952,
+    "accuracy": 0.6571251153945923,
+    "valLoss": 0.6175917983055115,
+    "valAccuracy": 0.6822222471237183
   },
-  "trainedAt": "2026-05-19T01:44:39.730Z"
+  "trainedAt": "2026-05-22T01:15:39.088Z"
 }

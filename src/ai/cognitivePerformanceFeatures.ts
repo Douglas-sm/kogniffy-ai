@@ -1,4 +1,5 @@
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
+import { buildReactionTimeProxySnapshot } from "@/ai/reactionTimeFeatures";
 
 export const COGNITIVE_PERFORMANCE_MODEL_FEATURES = [
   "reactionTimeProxyMs",
@@ -52,6 +53,7 @@ const MAX_REACTION_TIME_MS = 600;
 const MIN_MEMORY_TEST_SCORE = 40;
 const MAX_MEMORY_TEST_SCORE = 99;
 const DEFAULT_MAX_SEQUENCE = 2;
+const TARGET_MEMORY_SEQUENCE = 6;
 const PERFORMANCE_SCORE_INTERCEPT = 89.89455;
 const PERFORMANCE_SCORE_REACTION_WEIGHT = -0.162672;
 const PERFORMANCE_SCORE_MEMORY_WEIGHT = 0.479023;
@@ -134,53 +136,34 @@ export function buildCognitivePerformanceFeatureVectorFromValues(values: Cogniti
 
 export function buildCognitivePerformanceProxySnapshot(metrics: MetricsSnapshot): CognitivePerformanceProxySnapshot {
   const cognitiveMetricsAvailable = hasCognitiveSamples(metrics);
-  const primaryResponseTimeMs = averageOrFallback(
-    metrics.cognitiveMetrics.responseTimesMs,
-    metrics.reactionTimes,
-    DEFAULT_REACTION_TIME_MS
-  );
+  const reactionSnapshot = buildReactionTimeProxySnapshot(metrics);
+  const primaryResponseTimeMs = reactionSnapshot.primaryResponseTimeMs || DEFAULT_REACTION_TIME_MS;
   const averageSpeedMs =
     metrics.cognitiveMetrics.averageSpeedMs > 0
       ? sanitizeMetric(metrics.cognitiveMetrics.averageSpeedMs)
       : averageOrFallback(
           metrics.cognitiveMetrics.interClickTimesMs,
-          metrics.reactionTimes,
-          primaryResponseTimeMs || DEFAULT_REACTION_TIME_MS
+          [reactionSnapshot.interClickTimeMs, ...metrics.reactionTimes],
+          reactionSnapshot.interClickTimeMs || primaryResponseTimeMs || DEFAULT_REACTION_TIME_MS
         );
-  const interClickTimeMs = averageOrFallback(
-    metrics.cognitiveMetrics.interClickTimesMs,
-    [averageSpeedMs, ...metrics.reactionTimes, primaryResponseTimeMs],
-    averageSpeedMs || primaryResponseTimeMs || DEFAULT_REACTION_TIME_MS
-  );
+  const interClickTimeMs = reactionSnapshot.interClickTimeMs || averageSpeedMs || primaryResponseTimeMs || DEFAULT_REACTION_TIME_MS;
   const errorCount = cognitiveMetricsAvailable
-    ? Math.max(sanitizeMetric(metrics.cognitiveMetrics.errorCount), sanitizeMetric(metrics.sequenceErrors))
+    ? Math.max(reactionSnapshot.errorCount, sanitizeMetric(metrics.sequenceErrors))
     : sanitizeMetric(metrics.sequenceErrors);
-  const maxSequenceReached = cognitiveMetricsAvailable
-    ? Math.max(
-        DEFAULT_MAX_SEQUENCE,
-        sanitizeMetric(metrics.cognitiveMetrics.maxSequenceReached),
-        sanitizeMetric(metrics.maxSequenceLength),
-        sanitizeMetric(metrics.sequenceScore)
-      )
-    : Math.max(
-        DEFAULT_MAX_SEQUENCE,
-        sanitizeMetric(metrics.maxSequenceLength),
-        sanitizeMetric(metrics.sequenceScore)
-      );
-  const impulsivityCount = cognitiveMetricsAvailable
-    ? Math.max(sanitizeMetric(metrics.cognitiveMetrics.impulsivityCount), sanitizeMetric(metrics.impulsiveClicks))
-    : sanitizeMetric(metrics.impulsiveClicks);
-  const reactionTimeProxyMs = clamp(
-    0.65 * primaryResponseTimeMs + 0.35 * interClickTimeMs + 18 * errorCount + 12 * impulsivityCount,
-    MIN_REACTION_TIME_MS,
-    MAX_REACTION_TIME_MS
+  const maxSequenceReached = Math.max(DEFAULT_MAX_SEQUENCE, reactionSnapshot.maxSequenceReached);
+  const impulsivityCount = Math.max(reactionSnapshot.impulsivityCount, sanitizeMetric(metrics.impulsiveClicks));
+  const reactionTimeProxyMs = clamp(reactionSnapshot.reactionTimeProxyMs, MIN_REACTION_TIME_MS, MAX_REACTION_TIME_MS);
+  const sequenceProgress = clamp(
+    (maxSequenceReached - DEFAULT_MAX_SEQUENCE) / Math.max(1, TARGET_MEMORY_SEQUENCE - DEFAULT_MAX_SEQUENCE),
+    0,
+    1
   );
   const memoryTestProxyScore = clamp(
     MIN_MEMORY_TEST_SCORE +
-      59 * clamp((maxSequenceReached - DEFAULT_MAX_SEQUENCE) / 8, 0, 1) -
-      2 * errorCount -
-      1.5 * impulsivityCount -
-      Math.max(0, (averageSpeedMs - 420) / 50),
+      59 * sequenceProgress -
+      2.5 * errorCount -
+      1.75 * impulsivityCount -
+      Math.max(0, (averageSpeedMs - 430) / 60),
     MIN_MEMORY_TEST_SCORE,
     MAX_MEMORY_TEST_SCORE
   );

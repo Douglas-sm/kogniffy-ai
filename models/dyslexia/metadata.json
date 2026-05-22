@@ -1,0 +1,90 @@
+{
+  "features": [
+    "hitRate",
+    "missRate",
+    "resolvedRate",
+    "accuracyPerResolved",
+    "missesPerHit"
+  ],
+  "normalization": [
+    {
+      "feature": "hitRate",
+      "mean": 0.46333071661549613,
+      "std": 0.11363960983833714
+    },
+    {
+      "feature": "missRate",
+      "mean": 0.17653000068179195,
+      "std": 0.10517193824498255
+    },
+    {
+      "feature": "resolvedRate",
+      "mean": 0.6398607172972884,
+      "std": 0.08672075580595114
+    },
+    {
+      "feature": "accuracyPerResolved",
+      "mean": 0.725599839777432,
+      "std": 0.1462488833216751
+    },
+    {
+      "feature": "missesPerHit",
+      "mean": 0.47819917577814247,
+      "std": 0.5810637313998709
+    }
+  ],
+  "questionIds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+  ],
+  "rowCount": 3644,
+  "classDistribution": {
+    "noDyslexia": 3252,
+    "dyslexia": 392
+  },
+  "trainingMetrics": {
+    "loss": 0.6299484968185425,
+    "accuracy": 0.7102195024490356,
+    "valLoss": 0.6258624196052551,
+    "valAccuracy": 0.7252747416496277
+  },
+  "riskMapping": "oneMinusProbability",
+  "fixtureChecks": {
+    "goodControlRisk": 21,
+    "badControlRisk": 61,
+    "gameGoodControlRisk": 21,
+    "gameBadControlRisk": 48,
+    "passed": true
+  },
+  "trainedAt": "2026-05-22T01:12:51.157Z"
+}

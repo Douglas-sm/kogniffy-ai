@@ -2,8 +2,24 @@ import type { AttentionPrediction } from "@/ai/adhdModel";
 import { ATTENTION_RULE_LABELS } from "@/ai/adhdFeatures";
 import type { CognitivePerformancePrediction } from "@/ai/cognitivePerformanceModel";
 import { buildCognitivePerformanceProxySnapshot } from "@/ai/cognitivePerformanceFeatures";
-import type { KogniffyScores, RiskBand, RiskScore } from "@/ai/scoring";
+import type { DyslexiaPrediction } from "@/ai/dyslexiaModel";
+import type { ReactionTimePrediction } from "@/ai/reactionTimeModel";
+import { buildReactionTimeProxySnapshot, type ReactionTimeCategory } from "@/ai/reactionTimeFeatures";
+import { calculateMemoryReactionHeuristicRisk } from "@/ai/scoring";
+import type { KogniffyScores, RiskScore } from "@/ai/scoring";
 import type { MetricsSnapshot } from "@/metrics/metricsCollector";
+import type {
+  ModelValidationStatus,
+  ScoreResolution,
+  ScoreResolutionMap,
+  ScoreSource
+} from "@/report/resolveScores";
+import {
+  triageBandForRisk,
+  toTriageDisplayScore,
+  type TriageBand
+} from "@/report/triagePresentation";
+import { triageReadingForScore } from "@/report/triageReadings";
 
 export interface ReportCategoryDetail {
   label: string;
@@ -17,6 +33,11 @@ export interface ReportCategory {
   >;
   label: string;
   score: RiskScore;
+  displayScore: number;
+  displayBand: TriageBand;
+  displayLabel: string;
+  scoreSource: ScoreSource;
+  modelStatus: ModelValidationStatus;
   summary: string;
   recommendation: string;
   evidence: string[];
@@ -26,15 +47,34 @@ export interface ReportCategory {
 export interface KogniffyReport {
   totalTimeLabel: string;
   overallScore: number;
+  overallDisplayScore: number;
+  overallBand: TriageBand;
+  overallLabel: string;
   summary: string;
   categories: ReportCategory[];
   recommendations: string[];
 }
 
+interface ReportCategoryDraft {
+  id: ReportCategory["id"];
+  label: string;
+  score: RiskScore;
+  scoreSource: ScoreSource;
+  modelStatus: ModelValidationStatus;
+  summary: string;
+  recommendation: string;
+  evidence: string[];
+  details?: ReportCategoryDetail[];
+}
+
 interface GenerateReportOptions {
+  dyslexiaPrediction?: DyslexiaPrediction | null;
   attentionPrediction?: AttentionPrediction | null;
   attentionHeuristicScore?: number;
   cognitivePerformancePrediction?: CognitivePerformancePrediction | null;
+  reactionTimePrediction?: ReactionTimePrediction | null;
+  memoryReactionHeuristicScore?: number;
+  scoreResolutions?: Partial<ScoreResolutionMap>;
 }
 
 function average(values: number[]) {
@@ -62,8 +102,12 @@ function percent(value: number) {
   return `${Math.round(Math.max(0, value) * 100)}%`;
 }
 
-function formatScore(value: number) {
-  return `${Math.max(0, Math.round(value))}/100`;
+function formatRawScore(value: number) {
+  return `${Math.max(0, Math.min(100, Math.round(value)))}/100`;
+}
+
+function formatDisplayScore(value: number) {
+  return `${toTriageDisplayScore(value)}/100`;
 }
 
 function formatCount(value: number) {
@@ -97,20 +141,118 @@ function formatSigned(value: number) {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
-function bandText(band: RiskBand) {
-  if (band === "baixo") {
-    return "baixo";
+function formatSignedMs(value: number) {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${(Math.abs(value) / 1000).toFixed(1)}s`;
+}
+
+function resolutionSourceLabel(source: ScoreSource) {
+  if (source === "model") {
+    return "Modelo calibrado";
   }
 
-  if (band === "intermediario") {
-    return "intermediário";
+  if (source === "blended") {
+    return "Sessão observada + modelo";
   }
 
-  return "alto";
+  if (source === "fallback") {
+    return "Sessão observada + fallback calibrado";
+  }
+
+  return "Sessão observada";
+}
+
+function buildResolutionDetails(resolution: ScoreResolution | undefined) {
+  if (!resolution) {
+    return [];
+  }
+
+  const details: ReportCategoryDetail[] = [
+    {
+      label: "Origem do índice",
+      value: resolutionSourceLabel(resolution.scoreSource)
+    }
+  ];
+
+  if (resolution.modelStatus === "accepted" && resolution.modelRisk !== null) {
+    details.push({
+      label: "Heurística vs modelo",
+      value: `${formatDisplayScore(resolution.heuristicRisk)} heurística | ${formatDisplayScore(resolution.modelRisk)} modelo`
+    });
+  }
+
+  details.push({
+    label: "Decisão final",
+    value: resolution.rationale
+  });
+
+  return details;
+}
+
+function shouldSurfaceAcceptedModel(resolution: ScoreResolution | undefined) {
+  return resolution?.modelStatus === "accepted";
 }
 
 function categorySummary(label: string, score: RiskScore) {
-  return `${label}: pontuação indicativa em nível ${bandText(score.band)}, calculada a partir dos sinais observados durante a experiência.`;
+  const band = triageBandForRisk(score.value);
+  return `${label}: índice de triagem ${band.label.toLowerCase()}, calculado a partir dos sinais observados durante a experiência.`;
+}
+
+function buildCategoryPresentation(score: RiskScore) {
+  const displayScore = toTriageDisplayScore(score.value);
+  const displayBand = triageBandForRisk(score.value);
+
+  return {
+    displayScore,
+    displayBand
+  };
+}
+
+function createReportCategory(category: ReportCategoryDraft): ReportCategory {
+  const presentation = buildCategoryPresentation(category.score);
+
+  return {
+    ...category,
+    displayScore: presentation.displayScore,
+    displayBand: presentation.displayBand.key,
+    displayLabel: presentation.displayBand.label
+  };
+}
+
+function summarizeOverallTriage(categories: ReportCategory[]) {
+  const needsAttentionCount = categories.filter((category) =>
+    category.displayBand === "needsAttention" || category.displayBand === "attention"
+  ).length;
+  const regularCount = categories.filter((category) => category.displayBand === "regular").length;
+  const positiveCount = categories.filter((category) =>
+    category.displayBand === "extremelyPositive" ||
+    category.displayBand === "positive" ||
+    category.displayBand === "good"
+  ).length;
+
+  if (needsAttentionCount > 0) {
+    return `A triagem destacou ${needsAttentionCount} área(s) que pedem atenção mais próxima. Use o resultado para priorizar o acompanhamento, sem tratar esta leitura como diagnóstico.`;
+  }
+
+  if (regularCount > 0) {
+    return `A triagem mostrou um panorama favorável, com ${regularCount} área(s) que valem acompanhamento nas próximas sessões.`;
+  }
+
+  return positiveCount === categories.length
+    ? "A triagem mostrou sinais amplamente positivos nas áreas avaliadas, com bom equilíbrio geral nesta sessão."
+    : "A triagem mostrou um panorama estável e predominantemente positivo nesta sessão.";
+}
+
+function reactionCategoryLabel(category: ReactionTimeCategory) {
+  if (category === "good") {
+    return "rápida";
+  }
+
+  if (category === "average") {
+    return "intermediária";
+  }
+
+  return "lenta";
 }
 
 function missRateForColorGroup(metrics: MetricsSnapshot, predicate: (trialType: string) => boolean) {
@@ -242,6 +384,27 @@ function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
   ];
 }
 
+function buildDyslexiaDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  const phase = metrics.dyslexiaPhase;
+  const resolution = options.scoreResolutions?.dyslexiaRisk;
+  const details = buildResolutionDetails(resolution);
+
+  if (phase.startedWords > 0) {
+    details.push(
+      {
+        label: "Palavras concluídas",
+        value: `${formatCount(phase.completedWords)} / ${formatCount(phase.startedWords)}`
+      },
+      {
+        label: "Acertos nas escolhas",
+        value: `${formatCount(phase.hits)} / ${formatCount(phase.attempts)}`
+      }
+    );
+  }
+
+  return details.length > 0 ? details : undefined;
+}
+
 function buildColorEvidence(metrics: MetricsSnapshot) {
   const phase = metrics.colorPhase;
 
@@ -284,6 +447,57 @@ function buildColorEvidence(metrics: MetricsSnapshot) {
   return evidence;
 }
 
+function buildColorPatternDetail(metrics: MetricsSnapshot) {
+  const phase = metrics.colorPhase;
+
+  if (phase.startedTrials === 0) {
+    return "Sem respostas suficientes para destacar um padrão nesta fase.";
+  }
+
+  if (phase.misses > 0) {
+    const groupRates = [
+      { label: "Vermelho/verde", value: missRateForColorGroup(metrics, (trialType) => trialType === "redGreen") },
+      { label: "Azul/amarelo", value: missRateForColorGroup(metrics, (trialType) => trialType === "blueYellow") },
+      { label: "Baixo contraste", value: missRateForColorGroup(metrics, (trialType) => trialType === "lowContrast") }
+    ];
+    const worstGroup = groupRates.reduce((best, group) => (group.value > best.value ? group : best));
+
+    return `${worstGroup.label} concentrou a maior taxa de erro da fase (${percent(worstGroup.value)}).`;
+  }
+
+  if (phase.autoHelpCount > 0) {
+    return `A leitura ficou estável, mas houve ${formatCount(phase.autoHelpCount)} ${phase.autoHelpCount === 1 ? "intervenção" : "intervenções"} de ajuda automática.`;
+  }
+
+  return "Leitura estável nas famílias avaliadas, sem dificuldade dominante nesta sessão.";
+}
+
+function buildColorDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  const phase = metrics.colorPhase;
+  const resolution = options.scoreResolutions?.colorVisionRisk;
+  const details = buildResolutionDetails(resolution).filter((detail) => detail.label !== "Decisão final");
+
+  details.push({
+    label: "Padrão da fase",
+    value: buildColorPatternDetail(metrics)
+  });
+
+  if (phase.startedTrials > 0) {
+    details.push(
+      {
+        label: "Placas concluídas",
+        value: `${formatCount(phase.completedTrials)} / ${formatCount(phase.startedTrials)}`
+      },
+      {
+        label: "Acertos nas escolhas",
+        value: `${formatCount(phase.hits)} / ${formatCount(phase.attempts)}`
+      }
+    );
+  }
+
+  return details.length > 0 ? details : undefined;
+}
+
 function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateReportOptions) {
   if (!hasAttentionPhase(metrics)) {
     return [
@@ -313,7 +527,7 @@ function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateRepor
 
   if (options.attentionPrediction) {
     evidence.push(
-      `Pontuação heurística final: ${formatScore(options.attentionHeuristicScore ?? 0)}. Pontuação do modelo ADHD proxy calibrado por EEG: ${formatScore(options.attentionPrediction.score)}.`
+      `Índice heurístico final desta área: ${formatDisplayScore(options.attentionHeuristicScore ?? 0)}. Índice calibrado do modelo ADHD proxy: ${formatDisplayScore(options.attentionPrediction.score)}.`
     );
   }
 
@@ -321,14 +535,16 @@ function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateRepor
 
   if (liveSummary) {
     evidence.push(
-      `Durante a fase, ${liveSummary.count} amostras locais foram analisadas em tempo real, com média ${formatScore(liveSummary.average)} e faixa entre ${formatScore(liveSummary.min)} e ${formatScore(liveSummary.max)}.`
+      `Durante a fase, ${liveSummary.count} amostras locais foram analisadas em tempo real, com média ${formatDisplayScore(liveSummary.average)} e faixa entre ${formatDisplayScore(liveSummary.min)} e ${formatDisplayScore(liveSummary.max)}.`
     );
   }
 
   const criticalRule = mostCriticalAttentionRule(metrics);
 
   if (criticalRule) {
-    evidence.push(`Regra mais sensível nas amostras ao vivo: ${criticalRule.label}, com média ${formatScore(criticalRule.average)}.`);
+    evidence.push(
+      `Regra mais sensível nas amostras ao vivo: ${criticalRule.label}, com média ${formatDisplayScore(criticalRule.average)}.`
+    );
   }
 
   const topSignals = topAttentionSignals(options.attentionPrediction);
@@ -345,26 +561,30 @@ function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateRepor
 }
 
 function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  const details: ReportCategoryDetail[] = [
+    ...buildResolutionDetails(options.scoreResolutions?.attentionRisk)
+  ];
+
   if (!options.attentionPrediction) {
-    return undefined;
+    return details.length > 0 ? details : undefined;
   }
 
-  const details: ReportCategoryDetail[] = [
+  details.push(
     {
-      label: "Pontuação heurística",
-      value: formatScore(options.attentionHeuristicScore ?? 0)
+      label: "Índice heurístico",
+      value: formatDisplayScore(options.attentionHeuristicScore ?? 0)
     },
     {
-      label: "Pontuação do modelo ADHD",
-      value: formatScore(options.attentionPrediction.score)
+      label: "Índice do modelo ADHD",
+      value: formatDisplayScore(options.attentionPrediction.score)
     }
-  ];
+  );
   const liveSummary = summarizeLiveAttentionSamples(metrics);
 
   if (liveSummary) {
     details.push({
       label: "Amostras ao vivo",
-      value: `${liveSummary.count} registros | média ${formatScore(liveSummary.average)} | faixa ${formatScore(liveSummary.min)} a ${formatScore(liveSummary.max)}`
+      value: `${liveSummary.count} registros | média ${formatDisplayScore(liveSummary.average)} | faixa ${formatDisplayScore(liveSummary.min)} a ${formatDisplayScore(liveSummary.max)}`
     });
   }
 
@@ -373,7 +593,7 @@ function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReport
   if (criticalRule) {
     details.push({
       label: "Regra mais crítica",
-      value: `${criticalRule.label} (média ${formatScore(criticalRule.average)})`
+      value: `${criticalRule.label} (média ${formatDisplayScore(criticalRule.average)})`
     });
   }
 
@@ -408,29 +628,123 @@ function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReport
   return details;
 }
 
-function buildMemoryEvidence(metrics: MetricsSnapshot) {
-  return [
-    `Maior sequência alcançada: ${metrics.maxSequenceLength}.`,
-    `Pontuação de sequência registrada: ${metrics.sequenceScore}.`,
-    `${metrics.sequenceErrors} erro(s) de sequência apareceram durante a fase de memória/reação.`
+function buildMemoryEvidence(metrics: MetricsSnapshot, options: GenerateReportOptions) {
+  const prediction = options.reactionTimePrediction;
+  const resolution = options.scoreResolutions?.memoryReactionRisk;
+  const snapshot = prediction?.proxyMetrics ?? buildReactionTimeProxySnapshot(metrics);
+  const memoryHeuristicScore = options.memoryReactionHeuristicScore ?? calculateMemoryReactionHeuristicRisk(metrics);
+  const evidence = [
+    `Tempo médio para iniciar cada rodada do painel: ${formatShortMs(snapshot.primaryResponseTimeMs)}, com ${formatShortMs(snapshot.interClickTimeMs)} entre toques corretos consecutivos.`,
+    `Consistência da reação nesta fase: variação de ${formatShortMs(snapshot.reactionStdMs)} entre respostas e deriva de ${formatSignedMs(snapshot.fatigueDeltaMs)} do início ao fim.`,
+    `Maior sequência confirmada: ${formatCount(snapshot.maxSequenceReached)} em ${formatCount(snapshot.roundsPlayed)} rodada(s), com ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`,
+    `Índice heurístico desta área no painel: ${formatDisplayScore(memoryHeuristicScore)}.`,
+    "Somente sinais observados no próprio painel entram nesta leitura: início da rodada, ritmo entre toques, sequência, erros e impulsividade."
   ];
+
+  if (prediction && shouldSurfaceAcceptedModel(resolution)) {
+    evidence.push(
+      `O calibrador complementar de reação apontou faixa ${reactionCategoryLabel(prediction.dominantCategory)}, com desempenho previsto de ${formatRawScore(prediction.performanceScore)}. Depois da validação com a sessão observada, o índice exibido no relatório ficou em ${formatDisplayScore(resolution?.resolvedRisk ?? prediction.riskScore)}.`
+    );
+  }
+
+  return evidence;
+}
+
+function buildMemoryDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
+  const prediction = options.reactionTimePrediction;
+  const resolution = options.scoreResolutions?.memoryReactionRisk;
+  const snapshot = prediction?.proxyMetrics ?? buildReactionTimeProxySnapshot(metrics);
+  const memoryHeuristicScore = options.memoryReactionHeuristicScore ?? calculateMemoryReactionHeuristicRisk(metrics);
+  const details: ReportCategoryDetail[] = [
+    ...buildResolutionDetails(resolution),
+    {
+      label: "Índice heurístico de memória",
+      value: formatDisplayScore(memoryHeuristicScore)
+    },
+    {
+      label: "Consistência da reação",
+      value: `desvio ${formatShortMs(snapshot.reactionStdMs)} | deriva ${formatSignedMs(snapshot.fatigueDeltaMs)}`
+    },
+    {
+      label: "Rodadas analisadas",
+      value: `${formatCount(snapshot.roundsPlayed)} rodada(s)`
+    },
+    {
+      label: "Entradas consideradas",
+      value: "início da rodada, ritmo entre toques, sequência, erros e impulsividade observados no painel"
+    }
+  ];
+
+  if (!prediction || !shouldSurfaceAcceptedModel(resolution)) {
+    return details;
+  }
+
+  details.unshift(
+    {
+      label: "Desempenho previsto pelo calibrador",
+      value: formatRawScore(prediction.performanceScore)
+    },
+    {
+      label: "Faixa prevista",
+      value: reactionCategoryLabel(prediction.dominantCategory)
+    }
+  );
+
+  details.push({
+    label: "Composição final",
+    value:
+      prediction.source === "fallback"
+        ? "sessão observada com reforço complementar reduzido do fallback calibrado"
+        : "sessão observada com reforço complementar reduzido do modelo de reação"
+  });
+  details.push({
+    label: "Modo de inferência",
+    value:
+      prediction.source === "model"
+        ? "Modelo treinado com a base Reaction Time Dataset."
+        : "Fallback interpolado pelos limiares da base Reaction Time Dataset."
+  });
+
+  if (prediction.metadataSummary) {
+    details.push(
+      {
+        label: "Fonte de treino",
+        value: `${prediction.metadataSummary.sourceDataset} | alvo ${prediction.metadataSummary.targetColumn}`
+      },
+      {
+        label: "Distribuição da base",
+        value: `${formatCount(prediction.metadataSummary.classDistribution.good)} good | ${formatCount(prediction.metadataSummary.classDistribution.average)} average | ${formatCount(prediction.metadataSummary.classDistribution.bad)} bad`
+      },
+      {
+        label: "Feature de treino",
+        value: prediction.metadataSummary.featureColumnsUsed.join(", ")
+      },
+      {
+        label: "Treinado em",
+        value: formatDateTime(prediction.metadataSummary.trainedAt)
+      }
+    );
+  }
+
+  return details;
 }
 
 function buildCognitivePerformanceEvidence(
   metrics: MetricsSnapshot,
-  prediction: CognitivePerformancePrediction | null | undefined
+  prediction: CognitivePerformancePrediction | null | undefined,
+  options: GenerateReportOptions
 ) {
   const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
+  const resolution = options.scoreResolutions?.cognitivePerformanceRisk;
   const evidence = [
-    `Tempo médio para iniciar cada rodada do painel: ${formatShortMs(snapshot.primaryResponseTimeMs)}.`,
-    `Tempo médio entre acertos consecutivos: ${formatShortMs(snapshot.interClickTimeMs)}.`,
+    `O proxy global combinou reação ${formatShortMs(snapshot.reactionTimeProxyMs)} e memória ${Math.round(snapshot.memoryTestProxyScore)}/99.`,
     `Maior sequência confirmada: ${formatCount(snapshot.maxSequenceReached)}, com ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`,
-    `Proxies comportamentais usados no score: reação ${formatShortMs(snapshot.reactionTimeProxyMs)} e memória ${Math.round(snapshot.memoryTestProxyScore)}/99.`
+    "Este bloco resume apenas velocidade, memória de trabalho e impulsividade observadas na sessão, sem inserir fatores externos não medidos."
   ];
 
-  if (prediction) {
+  if (prediction && shouldSurfaceAcceptedModel(resolution)) {
     evidence.push(
-      `Pontuação prevista de desempenho cognitivo: ${formatScore(prediction.performanceScore)}. No relatório, isso é refletido como risco indicativo de ${formatScore(prediction.riskScore)}.`
+      `O calibrador cognitivo estimou desempenho de ${formatRawScore(prediction.performanceScore)}. Depois da validação com a sessão observada, o índice exibido no relatório ficou em ${formatDisplayScore(resolution?.resolvedRisk ?? prediction.riskScore)}.`
     );
   }
 
@@ -439,29 +753,16 @@ function buildCognitivePerformanceEvidence(
 
 function buildCognitivePerformanceDetails(
   metrics: MetricsSnapshot,
-  prediction: CognitivePerformancePrediction | null | undefined
+  prediction: CognitivePerformancePrediction | null | undefined,
+  options: GenerateReportOptions
 ): ReportCategoryDetail[] | undefined {
-  if (!prediction) {
-    return undefined;
-  }
-
   const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
+  const resolution = options.scoreResolutions?.cognitivePerformanceRisk;
   const details: ReportCategoryDetail[] = [
+    ...buildResolutionDetails(resolution),
     {
-      label: "Desempenho estimado",
-      value: formatScore(prediction.performanceScore)
-    },
-    {
-      label: "Risco refletido no relatório",
-      value: formatScore(prediction.riskScore)
-    },
-    {
-      label: "Tempo médio inicial",
-      value: formatShortMs(snapshot.primaryResponseTimeMs)
-    },
-    {
-      label: "Tempo médio entre cliques",
-      value: formatShortMs(snapshot.interClickTimeMs)
+      label: "Proxy comportamental",
+      value: `reação ${formatShortMs(snapshot.reactionTimeProxyMs)} | memória ${Math.round(snapshot.memoryTestProxyScore)}/99`
     },
     {
       label: "Maior sequência",
@@ -472,13 +773,32 @@ function buildCognitivePerformanceDetails(
       value: `${formatCount(snapshot.errorCount)} erro(s) | ${formatCount(snapshot.impulsivityCount)} impulso(s)`
     },
     {
+      label: "Entradas consideradas",
+      value: "proxy de reação da sessão e proxy de memória observado no painel"
+    }
+  ];
+
+  if (!prediction || !shouldSurfaceAcceptedModel(resolution)) {
+    return details.length > 0 ? details : undefined;
+  }
+
+  details.push(
+    {
+      label: "Desempenho estimado",
+      value: formatRawScore(prediction.performanceScore)
+    },
+    {
+      label: "Índice refletido no relatório",
+      value: formatDisplayScore(resolution?.resolvedRisk ?? prediction.riskScore)
+    },
+    {
       label: "Modo de inferência",
       value:
         prediction.source === "model"
           ? "Modelo treinado a partir da base Human Cognitive Performance Analysis."
           : "Fallback heurístico linear calibrado com a base Human Cognitive Performance Analysis."
     }
-  ];
+  );
 
   if (prediction.metadataSummary) {
     details.push(
@@ -510,72 +830,76 @@ export function generateReport(
   options: GenerateReportOptions = {}
 ): KogniffyReport {
   const categories: ReportCategory[] = [
-    {
+    createReportCategory({
       id: "dyslexiaRisk",
       label: "Leitura e letras",
       score: scores.dyslexiaRisk,
+      scoreSource: options.scoreResolutions?.dyslexiaRisk?.scoreSource ?? "heuristic",
+      modelStatus: options.scoreResolutions?.dyslexiaRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Leitura e letras", scores.dyslexiaRisk),
-      recommendation:
-        "Observe se trocas entre letras parecidas também aparecem em atividades escolares e procure um profissional especializado se a dúvida persistir.",
-      evidence: buildDyslexiaEvidence(metrics)
-    },
-    {
+      recommendation: triageReadingForScore("dyslexiaRisk", scores.dyslexiaRisk.value),
+      evidence: buildDyslexiaEvidence(metrics),
+      details: buildDyslexiaDetails(metrics, options)
+    }),
+    createReportCategory({
       id: "colorVisionRisk",
       label: "Cores e contraste",
       score: scores.colorVisionRisk,
+      scoreSource: options.scoreResolutions?.colorVisionRisk?.scoreSource ?? "heuristic",
+      modelStatus: options.scoreResolutions?.colorVisionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Cores e contraste", scores.colorVisionRisk),
-      recommendation:
-        "Compare os sinais observados com situações reais de identificação de cores e considere avaliação especializada quando houver impacto na rotina.",
-      evidence: buildColorEvidence(metrics)
-    },
-    {
+      recommendation: triageReadingForScore("colorVisionRisk", scores.colorVisionRisk.value),
+      evidence: buildColorEvidence(metrics),
+      details: buildColorDetails(metrics, options)
+    }),
+    createReportCategory({
       id: "attentionRisk",
       label: "Atenção",
       score: scores.attentionRisk,
+      scoreSource: options.scoreResolutions?.attentionRisk?.scoreSource ?? "heuristic",
+      modelStatus: options.scoreResolutions?.attentionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Atenção", scores.attentionRisk),
-      recommendation:
-        "Registre se respostas impulsivas ou perda de estímulos aparecem em outros contextos, sempre evitando conclusões clínicas sem avaliação.",
+      recommendation: triageReadingForScore("attentionRisk", scores.attentionRisk.value),
       evidence: buildAttentionEvidence(metrics, options),
       details: buildAttentionDetails(metrics, options)
-    },
-    {
+    }),
+    createReportCategory({
       id: "memoryReactionRisk",
       label: "Memória/Reação",
       score: scores.memoryReactionRisk,
+      scoreSource: options.scoreResolutions?.memoryReactionRisk?.scoreSource ?? "heuristic",
+      modelStatus: options.scoreResolutions?.memoryReactionRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Memória/Reação", scores.memoryReactionRisk),
-      recommendation:
-        "Repita atividades lúdicas de sequência e reação em momentos diferentes e procure orientação especializada para interpretar padrões consistentes.",
-      evidence: buildMemoryEvidence(metrics)
-    },
-    {
+      recommendation: triageReadingForScore("memoryReactionRisk", scores.memoryReactionRisk.value),
+      evidence: buildMemoryEvidence(metrics, options),
+      details: buildMemoryDetails(metrics, options)
+    }),
+    createReportCategory({
       id: "cognitivePerformanceRisk",
       label: "Desempenho cognitivo",
       score: scores.cognitivePerformanceRisk,
+      scoreSource: options.scoreResolutions?.cognitivePerformanceRisk?.scoreSource ?? "heuristic",
+      modelStatus: options.scoreResolutions?.cognitivePerformanceRisk?.modelStatus ?? "notAvailable",
       summary: categorySummary("Desempenho cognitivo", scores.cognitivePerformanceRisk),
-      recommendation:
-        "Observe se velocidade, memória de trabalho e impulsividade se repetem fora do jogo e use este resultado apenas como apoio educativo.",
-      evidence: buildCognitivePerformanceEvidence(metrics, options.cognitivePerformancePrediction),
-      details: buildCognitivePerformanceDetails(metrics, options.cognitivePerformancePrediction)
-    }
+      recommendation: triageReadingForScore("cognitivePerformanceRisk", scores.cognitivePerformanceRisk.value),
+      evidence: buildCognitivePerformanceEvidence(metrics, options.cognitivePerformancePrediction, options),
+      details: buildCognitivePerformanceDetails(metrics, options.cognitivePerformancePrediction, options)
+    })
   ];
 
-  const highCount = categories.filter((category) => category.score.band === "alto").length;
-  const intermediateCount = categories.filter((category) => category.score.band === "intermediario").length;
-
-  const summary =
-    highCount > 0
-      ? "A experiência encontrou possíveis indícios que merecem atenção em uma ou mais áreas. O resultado é apenas indicativo e não substitui avaliação profissional."
-      : intermediateCount > 0
-        ? "A experiência encontrou alguns sinais observados durante a experiência em nível intermediário. Use o resultado como apoio educativo, não como conclusão clínica."
-        : "A experiência apresentou sinais observados em nível baixo nas categorias avaliadas. Ainda assim, este resultado possui caráter apenas educativo e indicativo.";
+  const overallBand = triageBandForRisk(scores.overallScore);
+  const summary = summarizeOverallTriage(categories);
 
   return {
     totalTimeLabel: formatDuration(metrics.totalTimeMs),
     overallScore: scores.overallScore,
+    overallDisplayScore: toTriageDisplayScore(scores.overallScore),
+    overallBand: overallBand.key,
+    overallLabel: overallBand.label,
     summary,
     categories,
     recommendations: [
-      "Use este relatório como ponto de conversa com responsáveis e educadores.",
+      "Use este relatório como apoio para organizar uma triagem complementar, se necessário.",
       "Procure um profissional especializado para qualquer interpretação clínica.",
       "Não utilize esta experiência para rotular, diagnosticar ou excluir necessidades de acompanhamento."
     ]

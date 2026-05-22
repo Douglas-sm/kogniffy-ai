@@ -7,9 +7,9 @@ import {
 } from "@/colorblind/plates";
 import {
   type ButtonRect,
+  type ChoiceButtonState,
   drawCaveBackground,
   drawChoiceButton,
-  drawPanelText,
   drawPlatform,
   pointInRect
 } from "@/game/scenes/sceneUtils";
@@ -19,11 +19,19 @@ interface SceneTrial extends ColorTrialSpec {
 }
 
 const TRIAL_COUNT = 8;
+const CORRECT_FEEDBACK_MS = 220;
+const WRONG_FEEDBACK_MS = 360;
+
+interface ButtonFeedback {
+  label: string;
+  state: Exclude<ChoiceButtonState, "idle">;
+  untilMs: number;
+}
 
 export class ColorScene implements GameScene {
   id = "colors";
   title = "Portão tecnológico";
-  objective = "Identifique o código escondido nas cores";
+  objective = "Identifique o código numérico escondido nas cores";
   spawnSide = "right" as const;
   allowJump = false;
   exitMode = "portal" as const;
@@ -35,6 +43,8 @@ export class ColorScene implements GameScene {
   private startedAt = 0;
   private waitingForTrialStart = false;
   private completed = false;
+  private buttonFeedback: ButtonFeedback | null = null;
+  private pendingAdvanceAtMs: number | null = null;
 
   enter(engine: GameEngine) {
     const sessionSeed = Date.now() % 100000;
@@ -48,16 +58,32 @@ export class ColorScene implements GameScene {
     this.startedAt = 0;
     this.waitingForTrialStart = true;
     this.completed = false;
+    this.buttonFeedback = null;
+    this.pendingAdvanceAtMs = null;
 
     engine.dialogBox.setLines([
       "O portão usa placas cromáticas para liberar a passagem.",
-      "Os códigos agora misturam números e letras aleatórias.",
-      "Observe os pontos com calma e escolha entre quatro símbolos."
+      "Cada painel esconde apenas números para destravar o caminho.",
+      "Observe os pontos com calma e escolha entre quatro números."
     ]);
   }
 
   update(engine: GameEngine) {
-    if (this.completed || engine.dialogBox.isActive || !this.waitingForTrialStart) {
+    if (this.completed) {
+      return;
+    }
+
+    if (this.pendingAdvanceAtMs !== null && engine.timeMs >= this.pendingAdvanceAtMs) {
+      this.buttonFeedback = null;
+      this.pendingAdvanceAtMs = null;
+      this.advanceOrComplete(engine);
+    }
+
+    if (this.buttonFeedback && this.pendingAdvanceAtMs === null && engine.timeMs >= this.buttonFeedback.untilMs) {
+      this.buttonFeedback = null;
+    }
+
+    if (this.completed || engine.dialogBox.isActive || !this.waitingForTrialStart || this.pendingAdvanceAtMs !== null) {
       return;
     }
 
@@ -73,6 +99,14 @@ export class ColorScene implements GameScene {
     engine.metrics.recordColorTrialStarted(trial.type, trial.charType);
   }
 
+  getHudMessage() {
+    const trial = this.currentTrial();
+
+    return this.completed
+      ? "O portal abriu no centro. Caminhe até ele para seguir."
+      : trial?.prompt ?? "Portão desbloqueado. O código foi aceito.";
+  }
+
   draw(engine: GameEngine, ctx: CanvasRenderingContext2D) {
     drawCaveBackground(ctx, engine.timeMs, "#6b7bd6");
     for (const platform of this.platforms) {
@@ -80,32 +114,27 @@ export class ColorScene implements GameScene {
     }
 
     const trial = this.currentTrial();
-    drawPanelText(
-      ctx,
-      "Código cromático",
-      this.completed ? "O portal abriu no centro. Caminhe até ele para seguir." : trial?.prompt ?? "Portão desbloqueado. O código foi aceito."
-    );
 
     if (!trial) {
       return;
     }
 
     this.drawIshihara(ctx, trial);
-    this.optionRects(trial).forEach((rect) => drawChoiceButton(ctx, rect));
+    this.optionRects(trial).forEach((rect) => drawChoiceButton(ctx, rect, this.buttonStateFor(rect.label)));
 
     ctx.fillStyle = "#fff9e9";
     ctx.font = "800 17px Trebuchet MS, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("Escolha o caractere escondido:", 592, 164);
+    ctx.fillText("Escolha o número escondido:", 592, 164);
     ctx.fillStyle = "#d8e8ef";
     ctx.font = "700 14px Trebuchet MS, sans-serif";
-    ctx.fillText(`Tentativa ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
+    ctx.fillText(`Imagem ${this.trialIndex + 1} de ${this.trials.length}`, 592, 184);
   }
 
   onClick(engine: GameEngine, pointer: PointerPosition) {
     const trial = this.currentTrial();
 
-    if (!trial || this.completed || this.waitingForTrialStart) {
+    if (!trial || this.completed || this.waitingForTrialStart || this.pendingAdvanceAtMs !== null || this.hasActiveFeedback(engine.timeMs)) {
       return;
     }
 
@@ -142,10 +171,20 @@ export class ColorScene implements GameScene {
     if (correct) {
       engine.clearErrorStreak(this.id);
       engine.metrics.recordColorTrialCompleted();
-      this.advanceOrComplete(engine);
+      this.buttonFeedback = {
+        label: selected.label,
+        state: "correct",
+        untilMs: engine.timeMs + CORRECT_FEEDBACK_MS
+      };
+      this.pendingAdvanceAtMs = engine.timeMs + CORRECT_FEEDBACK_MS;
       return;
     }
 
+    this.buttonFeedback = {
+      label: selected.label,
+      state: "wrong",
+      untilMs: engine.timeMs + WRONG_FEEDBACK_MS
+    };
     engine.metrics.recordContrastError(trial.type);
     engine.registerError(this.id);
   }
@@ -160,11 +199,43 @@ export class ColorScene implements GameScene {
     this.advanceOrComplete(engine);
   }
 
+  getCanvasCursor(engine: GameEngine) {
+    const trial = this.currentTrial();
+
+    if (
+      engine.pointer.pointerType !== "mouse" ||
+      !trial ||
+      this.completed ||
+      engine.dialogBox.isActive ||
+      this.waitingForTrialStart ||
+      this.pendingAdvanceAtMs !== null ||
+      this.hasActiveFeedback(engine.timeMs)
+    ) {
+      return "default";
+    }
+
+    return this.optionRects(trial).some((rect) => pointInRect(engine.pointer, rect)) ? "pointer" : "default";
+  }
+
   private currentTrial() {
     return this.trials[this.trialIndex] ?? null;
   }
 
+  private hasActiveFeedback(timeMs: number) {
+    return Boolean(this.buttonFeedback && timeMs < this.buttonFeedback.untilMs);
+  }
+
+  private buttonStateFor(label: string): ChoiceButtonState {
+    if (!this.buttonFeedback || this.buttonFeedback.label !== label) {
+      return "idle";
+    }
+
+    return this.buttonFeedback.state;
+  }
+
   private advanceOrComplete(engine: GameEngine) {
+    this.buttonFeedback = null;
+    this.pendingAdvanceAtMs = null;
     this.trialIndex += 1;
 
     if (this.trialIndex >= this.trials.length) {
@@ -202,21 +273,26 @@ export class ColorScene implements GameScene {
   }
 
   private drawIshihara(ctx: CanvasRenderingContext2D, trial: SceneTrial) {
-    const plateRadius = 126;
-    const dotScale = 120;
+    const plateRadius = 132;
+    const dotScale = 124;
 
     ctx.save();
     ctx.translate(270, 260);
-    ctx.shadowColor = "rgba(49, 33, 9, 0.16)";
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = "#fffaf0";
+    ctx.shadowColor = "rgba(49, 33, 9, 0.1)";
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = "rgba(255, 251, 242, 0.96)";
     ctx.beginPath();
-    ctx.arc(0, 0, plateRadius + 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, plateRadius + 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.translate(270, 260);
+    ctx.fillStyle = "#fffdf7";
+    ctx.beginPath();
+    ctx.arc(0, 0, plateRadius + 1.2, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = trial.plate.backgroundColor;
     ctx.beginPath();
     ctx.arc(0, 0, plateRadius, 0, Math.PI * 2);
@@ -233,9 +309,15 @@ export class ColorScene implements GameScene {
     ctx.restore();
 
     ctx.strokeStyle = trial.plate.borderColor;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     ctx.arc(270, 260, plateRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.arc(270, 260, plateRadius + 1.9, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
