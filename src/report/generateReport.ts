@@ -162,7 +162,7 @@ function resolutionSourceLabel(source: ScoreSource) {
   return "Sessão observada";
 }
 
-function buildResolutionDetails(resolution: ScoreResolution | undefined) {
+function buildResolutionDetails(resolution: ScoreResolution | undefined, observedDecisionSummary?: string) {
   if (!resolution) {
     return [];
   }
@@ -183,7 +183,7 @@ function buildResolutionDetails(resolution: ScoreResolution | undefined) {
 
   details.push({
     label: "Decisão final",
-    value: resolution.rationale
+    value: resolution.modelStatus === "accepted" || !observedDecisionSummary ? resolution.rationale : observedDecisionSummary
   });
 
   return details;
@@ -370,6 +370,42 @@ function topAttentionSignals(prediction: AttentionPrediction | null | undefined)
   return source.slice(0, 3);
 }
 
+function buildDyslexiaDecisionSummary(metrics: MetricsSnapshot) {
+  const phase = metrics.dyslexiaPhase;
+
+  if (phase.startedWords === 0) {
+    return "A leitura final foi baseada nos poucos registros disponíveis na fase de letras desta sessão.";
+  }
+
+  const inversionSummary =
+    phase.inversionErrors === 0
+      ? "sem trocas entre letras parecidas"
+      : `${formatCount(phase.inversionErrors)} troca(s) entre letras parecidas`;
+
+  return `A leitura final priorizou o desempenho observado na fase de letras: ${formatCount(phase.completedWords)} de ${formatCount(phase.startedWords)} palavras concluídas, ${formatCount(phase.hits)} de ${formatCount(phase.attempts)} acertos e ${inversionSummary}.`;
+}
+
+function buildAttentionDecisionSummary(metrics: MetricsSnapshot) {
+  if (!hasAttentionPhase(metrics)) {
+    return `A leitura final priorizou os sinais observados na sessão: ${formatCount(metrics.impulsiveClicks)} clique(s) impulsivo(s), ${formatCount(metrics.missedTargets)} alvo(s) perdido(s) e tempo médio de reação de ${formatShortMs(average(metrics.reactionTimes))}.`;
+  }
+
+  const phase = metrics.attentionPhase;
+  return `A leitura final priorizou os sinais observados na fase de atenção: ${formatCount(phase.correctHits)} acertos em ${formatCount(phase.targetSpawns)} cristais corretos, ${formatCount(phase.omissions)} omissões e ${formatCount(phase.impulsiveErrors)} erro(s) por impulsividade.`;
+}
+
+function buildMemoryDecisionSummary(metrics: MetricsSnapshot) {
+  const snapshot = buildReactionTimeProxySnapshot(metrics);
+
+  return `A leitura final priorizou o painel observado nesta sessão: sequência máxima ${formatCount(snapshot.maxSequenceReached)}, ${formatCount(snapshot.errorCount)} erro(s) de sequência, ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s) e ${formatShortMs(snapshot.interClickTimeMs)} entre toques corretos.`;
+}
+
+function buildCognitivePerformanceDecisionSummary(metrics: MetricsSnapshot) {
+  const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
+
+  return `A leitura final priorizou o proxy da sessão: reação ${formatShortMs(snapshot.reactionTimeProxyMs)}, memória ${Math.round(snapshot.memoryTestProxyScore)}/99, sequência máxima ${formatCount(snapshot.maxSequenceReached)}, ${formatCount(snapshot.errorCount)} erro(s) de sequência e ${formatCount(snapshot.impulsivityCount)} clique(s) impulsivo(s).`;
+}
+
 function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
   const phase = metrics.dyslexiaPhase;
 
@@ -387,7 +423,7 @@ function buildDyslexiaEvidence(metrics: MetricsSnapshot) {
 function buildDyslexiaDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
   const phase = metrics.dyslexiaPhase;
   const resolution = options.scoreResolutions?.dyslexiaRisk;
-  const details = buildResolutionDetails(resolution);
+  const details = buildResolutionDetails(resolution, buildDyslexiaDecisionSummary(metrics));
 
   if (phase.startedWords > 0) {
     details.push(
@@ -562,7 +598,7 @@ function buildAttentionEvidence(metrics: MetricsSnapshot, options: GenerateRepor
 
 function buildAttentionDetails(metrics: MetricsSnapshot, options: GenerateReportOptions): ReportCategoryDetail[] | undefined {
   const details: ReportCategoryDetail[] = [
-    ...buildResolutionDetails(options.scoreResolutions?.attentionRisk)
+    ...buildResolutionDetails(options.scoreResolutions?.attentionRisk, buildAttentionDecisionSummary(metrics))
   ];
 
   if (!options.attentionPrediction) {
@@ -656,7 +692,7 @@ function buildMemoryDetails(metrics: MetricsSnapshot, options: GenerateReportOpt
   const snapshot = prediction?.proxyMetrics ?? buildReactionTimeProxySnapshot(metrics);
   const memoryHeuristicScore = options.memoryReactionHeuristicScore ?? calculateMemoryReactionHeuristicRisk(metrics);
   const details: ReportCategoryDetail[] = [
-    ...buildResolutionDetails(resolution),
+    ...buildResolutionDetails(resolution, buildMemoryDecisionSummary(metrics)),
     {
       label: "Índice heurístico de memória",
       value: formatDisplayScore(memoryHeuristicScore)
@@ -759,7 +795,7 @@ function buildCognitivePerformanceDetails(
   const snapshot = buildCognitivePerformanceProxySnapshot(metrics);
   const resolution = options.scoreResolutions?.cognitivePerformanceRisk;
   const details: ReportCategoryDetail[] = [
-    ...buildResolutionDetails(resolution),
+    ...buildResolutionDetails(resolution, buildCognitivePerformanceDecisionSummary(metrics)),
     {
       label: "Proxy comportamental",
       value: `reação ${formatShortMs(snapshot.reactionTimeProxyMs)} | memória ${Math.round(snapshot.memoryTestProxyScore)}/99`
