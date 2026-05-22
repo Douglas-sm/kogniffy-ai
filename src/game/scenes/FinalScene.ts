@@ -26,6 +26,7 @@ export class FinalScene implements GameScene {
     this.launchAtMs = null;
     this.clickStartedAtMs = null;
     this.reportOpened = false;
+    engine.metrics.finalize();
     engine.dialogBox.setLines([
       "A travessia terminou.",
       "O relatório organiza os sinais observados nesta triagem.",

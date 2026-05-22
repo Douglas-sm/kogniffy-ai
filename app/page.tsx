@@ -47,12 +47,10 @@ export default function Home() {
           />
           <section className={styles.contentText}>
             <p id="home-title" className={styles.subtitle}>
-              Plataforma gamificada de triagem cognitiva
+                Plataforma Gamificada de Triagem Cognitiva
             </p>
             <p className={styles.copy}>
-              Muitas dificuldades podem passar despercebidas no cotidiano. Nesta aventura, a criança ajuda Kog a
-              atravessar uma montanha enquanto o jogo observa padrões de interação, tempo de resposta, atenção e
-              memória em mini-desafios simples.
+                Acompanhe Kog em uma aventura interativa desenvolvida para explorar habilidades relacionadas à atenção, memória, leitura, percepção visual e tempo de reação. Por meio de mini desafios lúdicos, a plataforma coleta métricas comportamentais e utiliza Inteligência Artificial para identificar possíveis pontos de atenção.
             </p>
             <p className={styles.copy}>
               Ao final, o sistema organiza os sinais observados durante a experiência em um relatório de triagem com

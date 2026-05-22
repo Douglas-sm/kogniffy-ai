@@ -5,11 +5,11 @@
   "normalization": [
     {
       "feature": "reactionTimeProxyMs",
-      "mean": 495.2874421513446,
-      "std": 195.58909581927966
+      "mean": 496.8620575359603,
+      "std": 196.4552839473154
     }
   ],
-  "sourceDataset": "data/raw/reactiontime/reaction_time_dataset.csv",
+  "sourceDataset": "data\\raw\\reactiontime\\reaction_time_dataset.csv",
   "targetColumn": "category",
   "rowCount": 1998,
   "trainRowCount": 1599,
@@ -24,10 +24,10 @@
   ],
   "proxyDefinitionVersion": "v1",
   "trainingMetrics": {
-    "loss": 0.07096973061561584,
-    "accuracy": 0.973108172416687,
-    "valLoss": 0.0744052305817604,
-    "valAccuracy": 0.9749373197555542
+    "loss": 0.06206115707755089,
+    "accuracy": 0.9743589162826538,
+    "valLoss": 0.0795525312423706,
+    "valAccuracy": 0.9649122953414917
   },
-  "trainedAt": "2026-05-20T13:44:41.035Z"
+  "trainedAt": "2026-05-22T01:20:27.242Z"
 }

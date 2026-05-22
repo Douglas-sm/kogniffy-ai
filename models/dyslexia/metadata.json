@@ -9,28 +9,28 @@
   "normalization": [
     {
       "feature": "hitRate",
-      "mean": 0.4634782880310182,
-      "std": 0.11391586160143972
+      "mean": 0.46333071661549613,
+      "std": 0.11363960983833714
     },
     {
       "feature": "missRate",
-      "mean": 0.17734617688626542,
-      "std": 0.10542111165526635
+      "mean": 0.17653000068179195,
+      "std": 0.10517193824498255
     },
     {
       "feature": "resolvedRate",
-      "mean": 0.6408244649172868,
-      "std": 0.08894337188359058
+      "mean": 0.6398607172972884,
+      "std": 0.08672075580595114
     },
     {
       "feature": "accuracyPerResolved",
-      "mean": 0.7248694520864251,
-      "std": 0.145452810590222
+      "mean": 0.725599839777432,
+      "std": 0.1462488833216751
     },
     {
       "feature": "missesPerHit",
-      "mean": 0.47652558576920606,
-      "std": 0.560742752492865
+      "mean": 0.47819917577814247,
+      "std": 0.5810637313998709
     }
   ],
   "questionIds": [
@@ -73,18 +73,18 @@
     "dyslexia": 392
   },
   "trainingMetrics": {
-    "loss": 0.6380027532577515,
-    "accuracy": 0.7280521392822266,
-    "valLoss": 0.6091842651367188,
-    "valAccuracy": 0.7637362480163574
+    "loss": 0.6299484968185425,
+    "accuracy": 0.7102195024490356,
+    "valLoss": 0.6258624196052551,
+    "valAccuracy": 0.7252747416496277
   },
   "riskMapping": "oneMinusProbability",
   "fixtureChecks": {
-    "goodControlRisk": 15,
-    "badControlRisk": 64,
-    "gameGoodControlRisk": 15,
-    "gameBadControlRisk": 54,
+    "goodControlRisk": 21,
+    "badControlRisk": 61,
+    "gameGoodControlRisk": 21,
+    "gameBadControlRisk": 48,
     "passed": true
   },
-  "trainedAt": "2026-05-21T21:37:58.866Z"
+  "trainedAt": "2026-05-22T01:12:51.157Z"
 }
